@@ -1,0 +1,28 @@
+=== 主題一模型表現報告 ===
+[XGBoost_1A_屬性模型]
+Accuracy: 0.7961
+Precision: 0.2857
+Recall: 0.4211
+F1: 0.3404
+ROC_AUC: 0.8672
+PR_AUC: 0.3393
+Confusion Matrix:
+[[113  20]
+ [ 11   8]]
+
+[XGBoost_1B_課程Dummy模型]
+Accuracy: 0.8026
+Precision: 0.3103
+Recall: 0.4737
+F1: 0.3750
+ROC_AUC: 0.8664
+PR_AUC: 0.3370
+Confusion Matrix:
+[[113  20]
+ [ 10   9]]
+
+[MNL/Logit 模型註記]
+Model1A: Logit近似MNL_regularized
+Model1B: Logit近似MNL_regularized
+本研究因工具/收斂限制，以二元報名模型近似選擇模型。
+部份模型使用 regularized logit 解決奇異矩陣，p-value 可能不可得。
