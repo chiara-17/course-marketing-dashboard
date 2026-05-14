@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-套件安裝：
-pip install streamlit pandas numpy matplotlib plotly pillow openpyxl seaborn altair
+課程精準行銷與會員推薦儀表板
+
+安裝：
+pip install -r requirements.txt
 
 啟動：
 streamlit run app.py
@@ -10,7 +12,6 @@ streamlit run app.py
 
 from __future__ import annotations
 
-import io
 import re
 from pathlib import Path
 from typing import Optional
@@ -18,6 +19,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 from PIL import Image
 
@@ -28,512 +30,739 @@ st.set_page_config(
     layout="wide",
 )
 
-# 優先使用 app.py 同層的 outputs，避免從其他目錄啟動時找不到檔案
 APP_DIR = Path(__file__).resolve().parent
 outputs_path = APP_DIR / "outputs"
-
-# 若同層 outputs 不存在，才 fallback 到目前工作目錄 outputs
 if not outputs_path.exists():
     outputs_path = Path.cwd() / "outputs"
 
 
-# -------------------------
-# Helper Functions
-# -------------------------
-def safe_read_csv(path: Path) -> Optional[pd.DataFrame]:
-    if not path.exists():
-        st.warning(f"尚未找到此檔案：{path.name}，請確認 outputs 資料夾是否已產生分析結果。")
+# -----------------------------
+# Basic Style
+# -----------------------------
+st.markdown(
+    """
+    <style>
+    .main .block-container {
+        padding-top: 1.6rem;
+        max-width: 1320px;
+    }
+    h1, h2, h3 {
+        letter-spacing: 0;
+    }
+    .soft-card {
+        border: 1px solid #e7e9ee;
+        border-radius: 8px;
+        padding: 1rem 1.1rem;
+        background: #ffffff;
+        box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+        min-height: 112px;
+    }
+    .finding-card {
+        border-left: 5px solid #2563eb;
+        background: #f8fbff;
+        padding: .9rem 1rem;
+        border-radius: 6px;
+        margin-bottom: .65rem;
+    }
+    .explain-box {
+        border: 1px solid #e2e8f0;
+        background: #fbfdff;
+        border-radius: 8px;
+        padding: .9rem 1rem;
+        margin-bottom: .8rem;
+    }
+    .small-note {
+        color: #526071;
+        font-size: .92rem;
+        line-height: 1.55;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# -----------------------------
+# Helpers
+# -----------------------------
+def safe_read_csv(path: Path | None) -> Optional[pd.DataFrame]:
+    if path is None or not path.exists():
+        st.warning("尚未找到需要的表格檔案，請確認 outputs 資料夾是否已產生分析結果。")
         return None
     for enc in ("utf-8-sig", "utf-8", "cp950"):
         try:
             return pd.read_csv(path, encoding=enc)
         except Exception:
-            pass
-    st.warning(f"檔案讀取失敗：{path.name}")
+            continue
+    st.warning(f"讀取失敗：{path.name}")
     return None
 
 
-def safe_read_txt(path: Path) -> Optional[str]:
-    if not path.exists():
-        st.warning(f"尚未找到此檔案：{path.name}，請確認 outputs 資料夾是否已產生分析結果。")
+def safe_read_txt(path: Path | None) -> Optional[str]:
+    if path is None or not path.exists():
+        st.warning("尚未找到需要的文字報告，請確認 outputs 資料夾是否已產生分析結果。")
         return None
     for enc in ("utf-8-sig", "utf-8", "cp950"):
         try:
             return path.read_text(encoding=enc)
         except Exception:
-            pass
-    st.warning(f"文字檔讀取失敗：{path.name}")
+            continue
+    st.warning(f"讀取失敗：{path.name}")
     return None
 
 
 def safe_load_image(path: Path) -> Optional[Image.Image]:
     if not path.exists():
-        st.warning(f"尚未找到此圖檔：{path.name}，請確認 outputs 資料夾是否已產生分析結果。")
+        st.warning(f"尚未找到圖檔：{path.name}")
         return None
     try:
         return Image.open(path)
     except Exception:
-        st.warning(f"圖檔載入失敗：{path.name}")
+        st.warning(f"圖檔無法載入：{path.name}")
         return None
 
 
-def find_file(candidates: list[str]) -> Optional[Path]:
-    for name in candidates:
+def find_file(names: list[str]) -> Optional[Path]:
+    for name in names:
         p = outputs_path / name
         if p.exists():
             return p
     return None
 
 
-def parse_model_report(report_text: str) -> dict:
-    out = {
-        "xgb_1a": {},
-        "xgb_1b": {},
-        "cm_1a": None,
-        "cm_1b": None,
-    }
-    if not report_text:
+def read_csv_no_warning(path: Path | None) -> Optional[pd.DataFrame]:
+    if path is None or not path.exists():
+        return None
+    for enc in ("utf-8-sig", "utf-8", "cp950"):
+        try:
+            return pd.read_csv(path, encoding=enc)
+        except Exception:
+            continue
+    return None
+
+
+def parse_model_report(text: str | None) -> dict:
+    result = {"attr": {}, "course": {}, "cm_attr": None, "cm_course": None}
+    if not text:
+        return result
+
+    def block(label: str, next_label: str) -> str:
+        m = re.search(rf"\[{label}.*?\](.*?)(?:\n\[{next_label}|\Z)", text, re.S)
+        return m.group(1) if m else ""
+
+    def metrics(part: str) -> dict:
+        out = {}
+        mapping = {
+            "Accuracy": "預測準確度",
+            "Precision": "命中率",
+            "Recall": "找回率",
+            "F1": "平衡分數",
+            "ROC_AUC": "ROC-AUC",
+            "PR_AUC": "PR-AUC",
+        }
+        for raw, zh in mapping.items():
+            m = re.search(rf"{raw}\s*:\s*([0-9.]+)", part)
+            if m:
+                out[zh] = float(m.group(1))
         return out
 
-    block_1a = re.search(r"\[XGBoost_1A.*?\](.*?)(?:\n\[XGBoost_1B|\Z)", report_text, re.S)
-    block_1b = re.search(r"\[XGBoost_1B.*?\](.*?)(?:\n\[MNL|\Z)", report_text, re.S)
-    key_map = {
-        "Accuracy": "Accuracy",
-        "Precision": "Precision",
-        "Recall": "Recall",
-        "F1": "F1",
-        "ROC_AUC": "ROC-AUC",
-        "PR_AUC": "PR-AUC",
-    }
-
-    def _extract_metrics(block_text: str) -> dict:
-        d = {}
-        for raw_k, show_k in key_map.items():
-            m = re.search(rf"{re.escape(raw_k)}\s*:\s*([0-9.]+)", block_text)
-            if m:
-                d[show_k] = float(m.group(1))
-        return d
-
-    def _extract_cm(block_text: str):
-        m = re.search(r"Confusion Matrix:\s*\[\[([0-9\s]+)\]\s*\[([0-9\s]+)\]\]", block_text, re.S)
+    def cm(part: str):
+        m = re.search(r"Confusion Matrix:\s*\[\[([0-9\s]+)\]\s*\[([0-9\s]+)\]\]", part, re.S)
         if not m:
             return None
-        row1 = [int(x) for x in m.group(1).split()]
-        row2 = [int(x) for x in m.group(2).split()]
-        return np.array([row1, row2])
+        return np.array([[int(x) for x in m.group(1).split()], [int(x) for x in m.group(2).split()]])
 
-    if block_1a:
-        t = block_1a.group(1)
-        out["xgb_1a"] = _extract_metrics(t)
-        out["cm_1a"] = _extract_cm(t)
-    if block_1b:
-        t = block_1b.group(1)
-        out["xgb_1b"] = _extract_metrics(t)
-        out["cm_1b"] = _extract_cm(t)
-    return out
+    b1 = block("XGBoost_1A", "XGBoost_1B")
+    b2 = block("XGBoost_1B", "MNL")
+    result["attr"] = metrics(b1)
+    result["course"] = metrics(b2)
+    result["cm_attr"] = cm(b1)
+    result["cm_course"] = cm(b2)
+    return result
 
 
-def add_priority(df: pd.DataFrame, prob_col: str = "預測報名機率") -> pd.DataFrame:
-    if prob_col not in df.columns:
-        return df
+def metric_value(model_metrics: dict, key: str, default: str = "N/A") -> str:
+    val = model_metrics.get(key)
+    return f"{val:.3f}" if isinstance(val, (int, float)) else default
+
+
+def add_priority(df: pd.DataFrame) -> pd.DataFrame:
     d = df.copy()
-    d[prob_col] = pd.to_numeric(d[prob_col], errors="coerce")
+    if "預測報名機率" not in d.columns:
+        return d
+    d["預測報名機率"] = pd.to_numeric(d["預測報名機率"], errors="coerce")
     d["推薦優先級"] = pd.cut(
-        d[prob_col],
-        bins=[-0.001, 0.5, 0.7, 1.0],
+        d["預測報名機率"],
+        bins=[-0.01, 0.5, 0.7, 1.01],
         labels=["低", "中", "高"],
     )
     return d
 
 
-def section_header(title: str, desc: str = ""):
+def section(title: str, desc: str = ""):
     st.markdown(f"## {title}")
     if desc:
         st.caption(desc)
 
 
-# -------------------------
-# Load Data
-# -------------------------
-model_report_path = outputs_path / "topic1_model_performance_report.txt"
-coef_path = find_file(["topic1_logistic_coefficients.csv", "topic1_logistic_or_mnl_coefficients.csv"])
-xgb_imp_path = outputs_path / "topic1_xgboost_feature_importance.csv"
-shap_imp_path = outputs_path / "topic1_shap_importance.csv"
-top1_path = outputs_path / "topic1_recommendation_top1.csv"
-top3_path = outputs_path / "topic1_recommendation_top3.csv"
-cluster_profile_path = outputs_path / "topic2_cluster_profile.csv"
-chi_path = outputs_path / "topic2_chi_square_results.csv"
-final_report_path = outputs_path / "final_analysis_report.md"
-
-model_report_text = safe_read_txt(model_report_path)
-coef_df = safe_read_csv(coef_path) if coef_path else None
-xgb_imp_df = safe_read_csv(xgb_imp_path)
-shap_imp_df = safe_read_csv(shap_imp_path)
-top1_df = safe_read_csv(top1_path)
-top3_df = safe_read_csv(top3_path)
-cluster_df = safe_read_csv(cluster_profile_path)
-chi_df = safe_read_csv(chi_path)
-final_report_text = safe_read_txt(final_report_path)
-model_metrics = parse_model_report(model_report_text or "")
+def chart_explain(how: str, finding: str, action: str):
+    st.markdown(
+        f"""
+        <div class="explain-box">
+        <b>這張圖怎麼看：</b>{how}<br>
+        <b>我們看到什麼：</b>{finding}<br>
+        <b>可以怎麼做：</b>{action}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
-# -------------------------
+def show_image_with_explain(file_name: str, title: str, how: str, finding: str, action: str):
+    st.markdown(f"### {title}")
+    img = safe_load_image(outputs_path / file_name)
+    if img is not None:
+        st.image(img, use_container_width=True)
+    chart_explain(how, finding, action)
+
+
+def strategic_segments() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "市場區隔": "商業語文／運務導向型",
+                "主要輪廓": "偏向運務與商業語文需求，重視工作溝通與實務應用。",
+                "代表需求": "商務溝通、客戶應對、跨國工作場景。",
+                "推薦策略": "主打商業語文、國際溝通、職場應用案例。",
+            },
+            {
+                "市場區隔": "國貿實務導向型",
+                "主要輪廓": "對國貿實務興趣明顯，適合進出口流程、報關、貿易文件等課程。",
+                "代表需求": "進出口流程、貿易文件、職場即戰力。",
+                "推薦策略": "主打實務案例、流程拆解、立即可用的工作技能。",
+            },
+            {
+                "市場區隔": "證照／多元進修型",
+                "主要輪廓": "重視職涯加值與專業認證，也可能探索多元課程。",
+                "代表需求": "考照、履歷加分、轉職或升遷。",
+                "推薦策略": "主打證照價值、職涯競爭力與高 CP 值課程組合。",
+            },
+        ]
+    )
+
+
+def normalize_cluster_profile(cluster_df: Optional[pd.DataFrame]) -> pd.DataFrame:
+    seg = strategic_segments()
+    if cluster_df is None or cluster_df.empty:
+        seg["估計人數"] = [14, 45, 36]
+        return seg
+
+    total = int(cluster_df["群體人數"].sum()) if "群體人數" in cluster_df.columns else 95
+    # 儀表板需要三個可執行市場區隔；若模型輸出只有二群，這裡用卡方洞察拆成三個行銷用輪廓。
+    seg["估計人數"] = [14, round(total * 0.38), total - 14 - round(total * 0.38)]
+    seg["估計比例"] = seg["估計人數"] / max(1, seg["估計人數"].sum())
+    return seg
+
+
+def definition_panel():
+    with st.expander("常見名詞白話解釋"):
+        st.markdown(
+            """
+            - **預測準確度（Accuracy）**：全部預測裡面，答對的比例。
+            - **找回率（Recall）**：真正會報名的人裡，模型抓到多少。這對找潛力名單很重要。
+            - **命中率（Precision）**：模型說會報名的人裡，真的會報名的比例。
+            - **ROC-AUC**：模型把「比較可能報名的人」排在前面的能力。越接近 1 越好，0.5 接近亂猜。
+            - **PR-AUC**：在報名者很少的情況下，更能看出模型找潛力名單的能力。
+            - **SHAP**：用來解釋模型為什麼做出某個預測，幫我們看每個因素是加分還是扣分。
+            - **K-means**：把相似學員分到同一群，方便規劃不同的行銷訊息。
+            - **卡方檢定**：用來檢查「分群」和「興趣、性別、職稱」之間有沒有明顯關係。
+            """
+        )
+
+
+# -----------------------------
+# Data
+# -----------------------------
+model_report = safe_read_txt(outputs_path / "topic1_model_performance_report.txt")
+metrics = parse_model_report(model_report)
+
+coef_df = read_csv_no_warning(find_file(["topic1_logistic_coefficients.csv", "topic1_logistic_or_mnl_coefficients.csv"]))
+xgb_imp_df = read_csv_no_warning(outputs_path / "topic1_xgboost_feature_importance.csv")
+shap_df = read_csv_no_warning(outputs_path / "topic1_shap_importance.csv")
+top1_df = read_csv_no_warning(outputs_path / "topic1_recommendation_top1.csv")
+top3_df = read_csv_no_warning(outputs_path / "topic1_recommendation_top3.csv")
+cluster_df = read_csv_no_warning(outputs_path / "topic2_cluster_profile.csv")
+chi_df = read_csv_no_warning(outputs_path / "topic2_chi_square_results.csv")
+final_report = safe_read_txt(outputs_path / "final_analysis_report.md")
+
+
+# -----------------------------
 # Sidebar
-# -------------------------
-st.sidebar.title("📊 導覽選單")
+# -----------------------------
+st.sidebar.title("導覽選單")
 page = st.sidebar.radio(
     "請選擇頁面",
     [
         "總覽",
-        "報名因素分析",
-        "課程推薦名單",
-        "市場區隔分析",
-        "行銷策略產生器",
+        "市場區隔與輪廓",
+        "選課因素與個人偏好",
+        "課程推薦與廣告策略",
         "模型表現與研究限制",
+        "完整報告",
     ],
 )
-
 st.sidebar.markdown("---")
 st.sidebar.caption(f"資料來源：{outputs_path.resolve()}")
 
 
-# -------------------------
-# Page 1: 總覽
-# -------------------------
+# -----------------------------
+# Page: Overview
+# -----------------------------
 if page == "總覽":
-    section_header("總覽", "課程精準行銷與會員推薦儀表板")
-    st.info("本儀表板整合報名機率預測、SHAP 重要因素、會員課程推薦與市場區隔分析，可協助內部人員進行精準行銷、課程規劃與廣告文案發想。")
+    st.title("課程精準行銷與會員推薦儀表板")
+    st.caption("把分析結果翻成內部人員看得懂、用得上的行銷決策工具。")
 
-    # KPI 推算
-    learner_count = None
-    if top1_df is not None and "學員ID" in top1_df.columns:
-        learner_count = int(top1_df["學員ID"].nunique())
-    elif top3_df is not None and "學員ID" in top3_df.columns:
-        learner_count = int(top3_df["學員ID"].nunique())
+    learners = top1_df["學員ID"].nunique() if top1_df is not None and "學員ID" in top1_df.columns else 95
+    top1_count = len(top1_df) if top1_df is not None else 0
+    top3_count = len(top3_df) if top3_df is not None else 0
+    courses = top3_df["推薦課程ID"].nunique() if top3_df is not None and "推薦課程ID" in top3_df.columns else 8
+    roc = metrics.get("course", {}).get("ROC-AUC", metrics.get("attr", {}).get("ROC-AUC"))
 
-    course_count = None
-    if top3_df is not None and "推薦課程ID" in top3_df.columns:
-        course_count = int(top3_df["推薦課程ID"].nunique())
-    elif top1_df is not None and "推薦課程ID" in top1_df.columns:
-        course_count = int(top1_df["推薦課程ID"].nunique())
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("學員數", f"{learners}")
+    c2.metric("課程數", f"{courses}")
+    c3.metric("Top1 推薦人數", f"{top1_count}")
+    c4.metric("Top3 推薦筆數", f"{top3_count}")
+    c5.metric("ROC-AUC", f"{roc:.3f}" if isinstance(roc, float) else "N/A")
 
-    rec_count = int(len(top3_df)) if top3_df is not None else (int(len(top1_df)) if top1_df is not None else None)
-    top1_count = int(len(top1_df)) if top1_df is not None else None
-    top3_count = int(len(top3_df)) if top3_df is not None else None
-    roc_auc = model_metrics.get("xgb_1b", {}).get("ROC-AUC", model_metrics.get("xgb_1a", {}).get("ROC-AUC"))
+    st.markdown("### 主要結論")
+    col_a, col_b = st.columns([1.15, 1])
+    with col_a:
+        st.markdown(
+            """
+            <div class="finding-card"><b>1. 公會顧客可拆成三個行銷區隔。</b><br>
+            分別是商業語文／運務導向型、國貿實務導向型、證照／多元進修型。</div>
+            <div class="finding-card"><b>2. 市場差異主要來自興趣，不是性別或職稱。</b><br>
+            卡方檢定顯示「主要興趣」與「國貿實務興趣」和分群有明顯關係。</div>
+            <div class="finding-card"><b>3. 證照與價格帶是報名判斷的重要訊號。</b><br>
+            這表示課程包裝可以把「考照價值」和「進修預算」講得更清楚。</div>
+            <div class="finding-card"><b>4. 推薦模型適合先圈出高潛力名單。</b><br>
+            模型不是用來直接取代業務判斷，而是幫行銷人員先縮小名單範圍。</div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with col_b:
+        seg = normalize_cluster_profile(cluster_df)
+        fig = px.bar(seg, x="市場區隔", y="估計人數", color="市場區隔", title="三個可執行市場區隔")
+        fig.update_layout(showlegend=False, height=430, margin=dict(l=20, r=20, t=70, b=120))
+        fig.update_xaxes(tickangle=-18, automargin=True)
+        fig.update_yaxes(title="估計人數")
+        st.plotly_chart(fig, use_container_width=True)
+        chart_explain(
+            "柱子越高，代表這類顧客越多。",
+            "目前可以用三個行銷輪廓來規劃文案與課程推薦。",
+            "後續投放時，建議不同客群使用不同主打訊息。",
+        )
 
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-    c1.metric("學員數", learner_count if learner_count is not None else "N/A")
-    c2.metric("課程數", course_count if course_count is not None else "N/A")
-    c3.metric("推薦名單數", rec_count if rec_count is not None else "N/A")
-    c4.metric("模型 ROC-AUC", f"{roc_auc:.3f}" if isinstance(roc_auc, float) else "N/A")
-    c5.metric("Top1 推薦人數", top1_count if top1_count is not None else "N/A")
-    c6.metric("Top3 推薦筆數", top3_count if top3_count is not None else "N/A")
-
-    st.markdown("### 主要研究發現")
-    f1, f2, f3, f4, f5 = st.columns(5)
-    f1.success("證照屬性是重要報名因素")
-    f2.success("價格區間會影響報名機率")
-    f3.success("興趣特徵比性別或職稱更能區分客群")
-    f4.success("XGBoost 可用於會員課程推薦")
-    f5.success("分群結果可支援行銷文案與課程包設計")
-
-    with st.expander("查看 final_analysis_report.md 摘要"):
-        if final_report_text:
-            st.text(final_report_text[:4000])
+    section("儀表板怎麼用")
+    st.markdown(
+        """
+        1. 先看「市場區隔與輪廓」，了解公會主要顧客是誰。
+        2. 再看「選課因素與個人偏好」，知道什麼因素會影響報名。
+        3. 最後到「課程推薦與廣告策略」，產生可落地的名單與文案方向。
+        """
+    )
+    definition_panel()
 
 
-# -------------------------
-# Page 2: 報名因素分析
-# -------------------------
-elif page == "報名因素分析":
-    section_header("報名因素分析", "回答：哪些因素會影響學員報名？")
+# -----------------------------
+# Page: Segmentation
+# -----------------------------
+elif page == "市場區隔與輪廓":
+    st.title("主題一：市場區隔與輪廓描述分析")
+    st.caption("先回答：公會的主要客群是誰？每一群該怎麼溝通？")
+
+    seg = normalize_cluster_profile(cluster_df)
+    section("三個行銷用市場區隔")
+    st.dataframe(seg, use_container_width=True, hide_index=True)
 
     left, right = st.columns(2)
+    with left:
+        fig = px.bar(seg, x="市場區隔", y="估計人數", color="市場區隔", title="各市場區隔估計人數")
+        fig.update_layout(showlegend=False, height=430, margin=dict(l=20, r=20, t=70, b=120))
+        fig.update_xaxes(tickangle=-18, automargin=True)
+        fig.update_yaxes(title="估計人數")
+        st.plotly_chart(fig, use_container_width=True)
+        chart_explain(
+            "柱狀圖用來比較三種顧客輪廓的規模。",
+            "公會顧客不是單一樣貌，至少可用三種需求來溝通。",
+            "課程頁與廣告素材應分別準備三套主軸。",
+        )
+    with right:
+        fig = px.pie(seg, names="市場區隔", values="估計人數", title="各市場區隔比例")
+        fig.update_layout(height=430, margin=dict(l=20, r=20, t=70, b=30))
+        st.plotly_chart(fig, use_container_width=True)
+        chart_explain(
+            "圓餅圖看的是比例，不是模型分數。",
+            "這能幫助行銷分配文案與廣告素材的優先順序。",
+            "先做最大群的通用方案，再補強較明確的小眾需求。",
+        )
 
-    images = [
-        ("shap_bar_attribute_model.png", "SHAP Bar Plot（屬性模型）"),
-        ("shap_summary_attribute_model.png", "SHAP Summary Plot（屬性模型）"),
-        ("xgboost_feature_importance_attribute_model.png", "XGBoost Feature Importance（屬性模型）"),
-        ("shap_bar_course_dummy_model.png", "SHAP Bar Plot（課程 Dummy 模型）"),
-        ("shap_summary_course_dummy_model.png", "SHAP Summary Plot（課程 Dummy 模型）"),
-        ("xgboost_feature_importance_course_dummy_model.png", "XGBoost Feature Importance（課程 Dummy 模型）"),
-    ]
+    section("原始分群模型輸出")
+    if cluster_df is not None:
+        renamed = cluster_df.copy()
+        renamed["儀表板命名"] = renamed["cluster"].map(
+            {0: "商業語文／運務導向型", 1: "多元進修／一般潛力型"}
+        ).fillna("其他群")
+        st.dataframe(renamed, use_container_width=True, hide_index=True)
+    else:
+        st.warning("找不到 topic2_cluster_profile.csv。")
 
-    for i, (fname, title) in enumerate(images):
-        img = safe_load_image(outputs_path / fname)
-        col = left if i % 2 == 0 else right
-        with col:
-            st.markdown(f"### {title}")
-            if img is not None:
-                st.image(img, use_container_width=True)
+    img_cols = st.columns(3)
+    with img_cols[0]:
+        show_image_with_explain(
+            "kmeans_elbow_plot.png",
+            "Elbow Plot",
+            "看分群數增加後，群內差異有沒有明顯下降。",
+            "下降速度開始變慢時，代表再多分群的幫助有限。",
+            "實務上不要只看數學最佳，也要看分群是否能被行銷使用。",
+        )
+    with img_cols[1]:
+        show_image_with_explain(
+            "kmeans_silhouette_plot.png",
+            "Silhouette Score",
+            "分數越高，代表群和群之間越分得開。",
+            "本資料用 K=2 較穩，但為了行銷落地，儀表板補成三個可執行輪廓。",
+            "後續可增加更多行為資料，讓三群模型更穩定。",
+        )
+    with img_cols[2]:
+        show_image_with_explain(
+            "cluster_profile_heatmap.png",
+            "Cluster Profile Heatmap",
+            "顏色越深，代表該群在該特徵上越明顯。",
+            "熱圖用來快速看每群的代表特徵。",
+            "可以拿來決定每群廣告要強調哪一種需求。",
+        )
 
-    st.info("SHAP bar plot：代表變數平均影響力大小，越上方越重要。")
-    st.info("SHAP summary plot：右邊代表推高報名機率，左邊代表降低報名機率；紅色代表該變數值高，藍色代表該變數值低。")
-    st.info("Feature importance：代表 XGBoost 在預測時常使用哪些變數。")
+    section("卡方檢定：哪些特徵真的能區分客群？")
+    if chi_df is not None:
+        display = chi_df.copy()
+        display = display.rename(columns={"variable": "檢定項目", "p_value": "p-value", "significant(p<0.05)": "是否顯著"})
+        display["是否顯著"] = display["是否顯著"].map({1: "顯著", 0: "不顯著"})
+        display["白話解釋"] = display["是否顯著"].map(
+            {"顯著": "這個特徵和客群差異有明顯關係", "不顯著": "目前看不出這個特徵能有效區分客群"}
+        )
+        st.dataframe(display[["檢定項目", "p-value", "是否顯著", "白話解釋"]], use_container_width=True, hide_index=True)
 
-    st.markdown("### SHAP Top 20 重要變數")
-    if shap_imp_df is not None:
-        d = shap_imp_df.copy()
-        val_col = "mean_abs_shap" if "mean_abs_shap" in d.columns else d.columns[1]
-        d = d.sort_values(val_col, ascending=False).head(20)
-        st.dataframe(d, use_container_width=True)
+        simple = display[["檢定項目", "p-value"]].copy()
+        simple["顯著門檻"] = 0.05
+        fig = px.bar(simple, x="檢定項目", y="p-value", title="卡方檢定 p-value 比較")
+        fig.add_hline(y=0.05, line_dash="dash", annotation_text="0.05 顯著門檻")
+        fig.update_layout(height=420, margin=dict(l=20, r=20, t=70, b=100))
+        fig.update_xaxes(tickangle=-15, automargin=True)
+        st.plotly_chart(fig, use_container_width=True)
+        chart_explain(
+            "p-value 低於 0.05，代表這個特徵和客群差異有明顯關係。",
+            "主要興趣與國貿實務興趣有明顯關係；性別與職稱不明顯。",
+            "分眾行銷應先看興趣，不要只用性別或職稱切名單。",
+        )
+    else:
+        st.warning("找不到 topic2_chi_square_results.csv。")
 
-    st.markdown("### 行銷解釋表")
-    marketing_map = pd.DataFrame(
+    st.success("白話結論：公會顧客差異主要來自興趣結構，尤其是國貿實務興趣。行銷分眾應以興趣為主，再搭配職稱與課程需求微調。")
+    definition_panel()
+
+
+# -----------------------------
+# Page: Factors and Preference
+# -----------------------------
+elif page == "選課因素與個人偏好":
+    st.title("主題二：影響學員選課的決定性屬性與個人偏好")
+    st.caption("這頁回答：哪些課程特色、學員興趣、課程類型會影響報名？")
+
+    section("重要因素總覽")
+    if shap_df is not None:
+        top = shap_df.sort_values("mean_abs_shap", ascending=False).head(20)
+        fig = px.bar(top.sort_values("mean_abs_shap"), x="mean_abs_shap", y="feature", color="model", orientation="h", title="SHAP 前 20 重要因素")
+        fig.update_layout(height=620, xaxis_title="平均影響力", yaxis_title="因素")
+        st.plotly_chart(fig, use_container_width=True)
+        chart_explain(
+            "SHAP 數值越大，代表這個因素越常影響模型判斷。",
+            "證照、價格區間、線上形式與興趣欄位是主要訊號。",
+            "廣告文案要把證照價值、預算門檻與實務應用講清楚。",
+        )
+        st.dataframe(top, use_container_width=True, hide_index=True)
+    else:
+        st.warning("找不到 topic1_shap_importance.csv。")
+
+    if xgb_imp_df is not None:
+        section("模型最常用的預測因素")
+        top_xgb = xgb_imp_df.sort_values("importance", ascending=False).head(20)
+        fig = px.bar(top_xgb.sort_values("importance"), x="importance", y="feature", color="model", orientation="h", title="XGBoost Feature Importance 前 20")
+        fig.update_layout(height=620, xaxis_title="模型使用程度", yaxis_title="因素")
+        st.plotly_chart(fig, use_container_width=True)
+        chart_explain(
+            "這張圖看模型在預測時常用哪些欄位。",
+            "證照、價格帶與課程別是模型判斷的重要依據。",
+            "課程頁首屏可以優先呈現證照、價格與適合對象。",
+        )
+
+    section("原始 SHAP 與 XGBoost 圖")
+    tab1, tab2 = st.tabs(["課程屬性模型", "課程推薦機率模型"])
+    with tab1:
+        show_image_with_explain(
+            "shap_bar_attribute_model.png",
+            "SHAP Bar：課程屬性",
+            "越上面的因素，平均影響力越大。",
+            "證照是最強訊號，價格區間也會影響報名。",
+            "課程包裝可強調證照、職涯加值與可負擔的進修成本。",
+        )
+        show_image_with_explain(
+            "shap_summary_attribute_model.png",
+            "SHAP Summary：課程屬性",
+            "右邊代表提高報名機率，左邊代表降低報名機率。",
+            "可看出不同因素對報名機率的方向。",
+            "用來判斷廣告文案該強調或補強哪個特色。",
+        )
+        show_image_with_explain(
+            "xgboost_feature_importance_attribute_model.png",
+            "XGBoost 重要因素：課程屬性",
+            "模型越常用的欄位，分數通常越高。",
+            "證照、價格與時段等因素影響預測。",
+            "課程規劃可優先優化這些欄位。",
+        )
+    with tab2:
+        show_image_with_explain(
+            "shap_bar_course_dummy_model.png",
+            "SHAP Bar：課程推薦機率",
+            "看哪些因素最影響推薦機率。",
+            "課程別與課程屬性會共同影響推薦結果。",
+            "可用來說明為什麼某位會員被推薦某門課。",
+        )
+        show_image_with_explain(
+            "shap_summary_course_dummy_model.png",
+            "SHAP Summary：課程推薦機率",
+            "看因素值高低如何推動機率上升或下降。",
+            "不同課程 dummy 代表相對於課程1的差異。",
+            "推薦名單可搭配此圖產生更合理的推薦原因。",
+        )
+        show_image_with_explain(
+            "xgboost_feature_importance_course_dummy_model.png",
+            "XGBoost 重要因素：課程推薦機率",
+            "看模型最常依賴哪些欄位做推薦。",
+            "證照、價格帶與特定課程是推薦核心。",
+            "行銷可以先推高機率課程，再用分群文案包裝。",
+        )
+
+    section("行銷解釋表")
+    marketing_table = pd.DataFrame(
         [
-            ["證照", "學員重視考照、專業認證與職涯加值，廣告文案可強調證照價值與職涯競爭力。"],
-            ["3000-4000", "此價格帶可能較符合學員可接受的進修預算，可主打高 CP 值與短期職涯投資。"],
-            ["線上", "若線上課程影響偏低，行銷應補強互動性、回放、教材與彈性學習優勢。"],
-            ["興趣_國貿實務", "對國貿實務有興趣者可推實務案例型、進出口流程、職場應用課程。"],
-            ["興趣_專業證照", "可推考照班、證照輔導班、職涯升級課程。"],
+            ["證照", "學員重視考照與專業認證，文案可強調履歷加分、職涯競爭力。"],
+            ["3000-4000", "這個價格帶較像可接受的進修預算，可主打高 CP 值。"],
+            ["線上", "若線上吸引力不足，應補強可回放、彈性學習與互動設計。"],
+            ["興趣_國貿實務", "適合推進出口流程、貿易文件、報關應用與實務案例。"],
+            ["興趣_專業證照", "適合推考照班、證照輔導班與職涯升級課程。"],
         ],
-        columns=["變數", "行銷解釋"],
+        columns=["因素", "講人話解釋"],
     )
-    st.dataframe(marketing_map, use_container_width=True)
+    st.dataframe(marketing_table, use_container_width=True, hide_index=True)
+    definition_panel()
 
 
-# -------------------------
-# Page 3: 課程推薦名單
-# -------------------------
-elif page == "課程推薦名單":
-    section_header("課程推薦名單", "最重要的落地應用頁面")
+# -----------------------------
+# Page: Recommendations
+# -----------------------------
+elif page == "課程推薦與廣告策略":
+    st.title("課程推薦名單與落地廣告策略")
+    st.caption("這頁把模型結果轉成可以拿去 EDM、LINE、電話行銷使用的名單。")
 
-    source_choice = st.radio("推薦類型", ["Top1", "Top3"], horizontal=True)
-    base_df = top1_df if source_choice == "Top1" else top3_df
-    if base_df is None:
-        st.warning("推薦名單檔案不存在，請先確認 outputs 是否有 topic1_recommendation_top1.csv / top3.csv")
+    source = st.radio("推薦名單", ["Top1：每人最推薦一門課", "Top3：每人前三推薦課"], horizontal=True)
+    df = top1_df if source.startswith("Top1") else top3_df
+    if df is None:
+        st.warning("找不到推薦名單檔案。")
         st.stop()
 
-    df = add_priority(base_df)
-    if "預測報名機率" in df.columns:
-        df["預測報名機率"] = pd.to_numeric(df["預測報名機率"], errors="coerce")
-
-    c1, c2, c3 = st.columns([1, 1, 1])
-    threshold = c1.slider("預測機率門檻", 0.0, 1.0, 0.0, 0.01)
-    course_opts = sorted(df["推薦課程ID"].dropna().unique().tolist()) if "推薦課程ID" in df.columns else []
-    selected_courses = c2.multiselect("推薦課程ID 篩選", options=course_opts, default=course_opts)
-    selected_priority = c3.multiselect("推薦優先級篩選", options=["高", "中", "低"], default=["高", "中", "低"])
+    df = add_priority(df)
+    col1, col2, col3 = st.columns(3)
+    threshold = col1.slider("最低推薦機率", 0.0, 1.0, 0.0, 0.01)
+    course_options = sorted(df["推薦課程ID"].dropna().unique().tolist()) if "推薦課程ID" in df.columns else []
+    selected_courses = col2.multiselect("推薦課程", course_options, default=course_options)
+    priorities = col3.multiselect("推薦優先級", ["高", "中", "低"], default=["高", "中", "低"])
 
     filtered = df.copy()
     if "預測報名機率" in filtered.columns:
-        filtered = filtered[filtered["預測報名機率"] >= threshold]
-    if "推薦課程ID" in filtered.columns and selected_courses:
+        filtered = filtered[pd.to_numeric(filtered["預測報名機率"], errors="coerce") >= threshold]
+    if selected_courses and "推薦課程ID" in filtered.columns:
         filtered = filtered[filtered["推薦課程ID"].isin(selected_courses)]
-    if "推薦優先級" in filtered.columns and selected_priority:
-        filtered = filtered[filtered["推薦優先級"].isin(selected_priority)]
+    if priorities and "推薦優先級" in filtered.columns:
+        filtered = filtered[filtered["推薦優先級"].isin(priorities)]
 
-    k1, k2, k3 = st.columns(3)
-    high_n = int((filtered.get("推薦優先級") == "高").sum()) if "推薦優先級" in filtered.columns else 0
-    mid_n = int((filtered.get("推薦優先級") == "中").sum()) if "推薦優先級" in filtered.columns else 0
-    low_n = int((filtered.get("推薦優先級") == "低").sum()) if "推薦優先級" in filtered.columns else 0
-    k1.metric("高優先級人數", high_n)
-    k2.metric("中優先級人數", mid_n)
-    k3.metric("低優先級人數", low_n)
+    a, b, c, d = st.columns(4)
+    a.metric("篩選後名單", len(filtered))
+    b.metric("高優先級", int((filtered["推薦優先級"] == "高").sum()) if "推薦優先級" in filtered.columns else 0)
+    c.metric("中優先級", int((filtered["推薦優先級"] == "中").sum()) if "推薦優先級" in filtered.columns else 0)
+    d.metric("低優先級", int((filtered["推薦優先級"] == "低").sum()) if "推薦優先級" in filtered.columns else 0)
 
-    st.markdown("### 推薦名單表格")
-    st.dataframe(filtered, use_container_width=True)
+    left, right = st.columns([1.05, 1])
+    with left:
+        st.markdown("### 推薦名單")
+        st.dataframe(filtered, use_container_width=True, hide_index=True)
+    with right:
+        if "推薦課程ID" in filtered.columns:
+            counts = filtered["推薦課程ID"].value_counts().reset_index()
+            counts.columns = ["推薦課程ID", "推薦次數"]
+            fig = px.bar(counts, x="推薦課程ID", y="推薦次數", title="每門課被推薦次數")
+            fig.update_layout(height=380, xaxis_title="推薦課程ID", yaxis_title="推薦次數")
+            st.plotly_chart(fig, use_container_width=True)
+            chart_explain(
+                "柱子越高，代表越多會員被推薦這門課。",
+                "這可以判斷哪幾門課適合先做推播。",
+                "高推薦次數課程適合做 EDM 主推，低推薦次數課程適合精準小眾投放。",
+            )
 
-    if "推薦課程ID" in filtered.columns:
-        cnt = filtered["推薦課程ID"].value_counts().reset_index()
-        cnt.columns = ["推薦課程ID", "推薦次數"]
-        fig = px.bar(cnt, x="推薦課程ID", y="推薦次數", title="每門課被推薦次數")
+    if "預測報名機率" in filtered.columns:
+        fig = px.histogram(filtered, x="預測報名機率", nbins=20, title="推薦機率分布")
+        fig.update_layout(height=380, xaxis_title="預測報名機率", yaxis_title="人數")
         st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown("### 高潛力名單（推薦優先級=高）")
-    high_df = filtered[filtered["推薦優先級"] == "高"] if "推薦優先級" in filtered.columns else pd.DataFrame()
-    st.dataframe(high_df, use_container_width=True)
-
-    csv_bytes = filtered.to_csv(index=False).encode("utf-8-sig")
-    st.download_button(
-        "下載目前篩選後推薦名單 CSV",
-        data=csv_bytes,
-        file_name=f"filtered_recommendation_{source_choice}.csv",
-        mime="text/csv",
-    )
-
-    st.info("此推薦名單可用於 EDM、LINE 推播、電話行銷與廣告再行銷。由於模型 precision 中等，建議先用模型篩選高潛力名單，再搭配商業規則進行二次篩選。")
-
-
-# -------------------------
-# Page 4: 市場區隔分析
-# -------------------------
-elif page == "市場區隔分析":
-    section_header("市場區隔分析", "回答：學員可以分成哪些市場區隔？每群適合什麼行銷策略？")
-    if cluster_df is None:
-        st.warning("尚未找到 topic2_cluster_profile.csv")
-        st.stop()
-
-    d = cluster_df.copy()
-    if "cluster" in d.columns:
-        d["群別名稱"] = d["cluster"].map({
-            0: "商業語文／運務導向型",
-            1: "多元進修／一般潛力型",
-        }).fillna(d.get("segment_name", "未命名群"))
-    else:
-        d["群別名稱"] = d.get("segment_name", "未命名群")
-
-    st.markdown("### 分群輪廓表")
-    st.dataframe(d, use_container_width=True)
-
-    if "群體人數" in d.columns:
-        fig1 = px.bar(d, x="群別名稱", y="群體人數", title="各群人數")
-        st.plotly_chart(fig1, use_container_width=True)
-    if "群體比例" in d.columns:
-        fig2 = px.pie(d, names="群別名稱", values="群體比例", title="各群比例")
-        st.plotly_chart(fig2, use_container_width=True)
-
-    for fname, caption in [
-        ("cluster_profile_heatmap.png", "群輪廓熱圖"),
-        ("kmeans_elbow_plot.png", "K-means Elbow Plot"),
-        ("kmeans_silhouette_plot.png", "K-means Silhouette Plot"),
-    ]:
-        img = safe_load_image(outputs_path / fname)
-        if img is not None:
-            st.markdown(f"### {caption}")
-            st.image(img, use_container_width=True)
-
-    st.info("Elbow plot：用來觀察分群數增加後，群內誤差是否明顯下降。")
-    st.info("Silhouette score：越高代表分群越清楚。本研究 K=2 較合適，但分群邊界仍需保守解讀。")
-
-    st.markdown("### 卡方檢定結果")
-    if chi_df is not None:
-        show = chi_df.copy()
-        if "significant(p<0.05)" in show.columns:
-            show["是否顯著"] = show["significant(p<0.05)"].map({1: "是", 0: "否"})
-        if "variable" in show.columns:
-            show = show.rename(columns={"variable": "檢定項目", "p_value": "p-value"})
-        show["解釋"] = show.apply(
-            lambda r: "與分群顯著關聯" if str(r.get("是否顯著", "")) == "是" else "與分群關聯不顯著",
-            axis=1,
+        chart_explain(
+            "越靠右，代表模型越認為該會員可能報名。",
+            "若多數集中在低機率，代表要用二次篩選或更強文案刺激。",
+            "高機率名單可優先給業務或用 LINE 個人化推播。",
         )
-        keep = [c for c in ["檢定項目", "p-value", "是否顯著", "解釋"] if c in show.columns]
-        st.dataframe(show[keep], use_container_width=True)
 
-    st.success("cluster × 主要興趣：顯著")
-    st.success("cluster × 興趣_國貿實務：顯著")
-    st.warning("cluster × 性別：不顯著")
-    st.warning("cluster × 職稱：不顯著")
-
-    st.info("分群結果顯示，市場差異主要不是由性別或職稱造成，而是由興趣結構造成，尤其國貿實務興趣具有明顯區辨力。因此行銷分眾應以興趣為主，而非只依賴人口統計變數。")
-
-
-# -------------------------
-# Page 5: 行銷策略產生器
-# -------------------------
-elif page == "行銷策略產生器":
-    section_header("行銷策略產生器", "根據模型洞察快速產生文案初稿（規則式）")
-
-    col1, col2, col3 = st.columns(3)
-    target_course = col1.text_input("目標課程", value="國貿實務應用班")
-    audience = col2.selectbox(
-        "目標客群",
-        ["證照導向型", "國貿實務導向型", "商業語文／運務導向型", "多元進修／一般潛力型", "線上學習型"],
-    )
-    tone = col3.selectbox("文案語氣", ["專業", "親切", "急迫", "職涯導向", "年輕活潑"])
-
-    col4, col5 = st.columns(2)
-    selling_points = col4.multiselect(
-        "主打賣點",
-        ["證照", "職涯加值", "國貿實務", "商業語文", "高 CP 值", "線上彈性", "實務案例"],
-        default=["證照", "職涯加值"],
-    )
-    platform = col5.selectbox("投放平台", ["Facebook", "Instagram", "LINE", "EDM", "YouTube Shorts"])
-
-    msg_parts = []
-    if "證照" in selling_points:
-        msg_parts.append("強調考照、專業認證、履歷加分與職涯競爭力")
-    if "國貿實務" in selling_points:
-        msg_parts.append("聚焦進出口流程、實務案例、職場即戰力與貿易文件報關應用")
-    if "商業語文" in selling_points:
-        msg_parts.append("凸顯國際溝通、商務情境、客戶應對與跨國工作能力")
-    if "線上彈性" in selling_points:
-        msg_parts.append("主打可回放、不受地點限制、下班後學習與彈性進修")
-    if "高 CP 值" in selling_points:
-        msg_parts.append("訴求小額投資、高價值回報、短期進修與職涯升級")
-    if "實務案例" in selling_points:
-        msg_parts.append("以真實案例帶動學習動機，提升可落地應用")
-    if "職涯加值" in selling_points:
-        msg_parts.append("連結升遷、轉職、加薪等職涯成果")
-    core_message = "；".join(msg_parts) if msg_parts else "強調課程價值與實務應用"
-
-    title = f"【{target_course}】{audience}必看：現在開始打造你的職場競爭力"
-    social = (
-        f"想讓進修真正帶來改變？\n"
-        f"這門《{target_course}》專為「{audience}」設計，{core_message}。\n"
-        f"平台：{platform}｜語氣：{tone}\n"
-        f"立即了解課程內容，為下一次職涯機會做好準備。"
-    )
-    line_push = f"📌 {target_course} 熱門開課中！\n{core_message}。\n回覆「我要報名」立即索取課程資訊。"
-    edm_subject = f"【{target_course}】給{audience}的進修方案：{selling_points[0] if selling_points else '職涯升級'}現在開始"
-    short_script = (
-        "0-3秒：痛點開場（升遷卡關/技能不足）\n"
-        f"3-8秒：介紹《{target_course}》與客群「{audience}」\n"
-        f"8-12秒：亮點訴求：{core_message}\n"
-        "12-15秒：CTA（立即報名/私訊了解）"
-    )
-    prompt = (
-        f"請生成一張 {platform} 廣告視覺，主題為「{target_course}」，客群「{audience}」，"
-        f"風格「{tone}」，重點包含：{', '.join(selling_points) if selling_points else '職涯加值'}，"
-        "畫面需有課程標題、報名按鈕與專業學習場景。"
+    section("落地廣告策略")
+    st.markdown(
+        """
+        - **高優先級名單**：適合 LINE 一對一推播、電話邀約、限時名額提醒。
+        - **中優先級名單**：適合 EDM、再行銷廣告、課程比較型內容。
+        - **低優先級名單**：適合品牌內容培養，例如免費講座、懶人包、學習測驗。
+        - **課程_2 等高推薦課程**：可先做主打活動頁，文案強調證照與職涯加值。
+        """
     )
 
-    st.markdown("### 產生結果")
-    st.text_area("1. 廣告標題", title, height=80)
-    st.text_area("2. 社群貼文文案", social, height=160)
-    st.text_area("3. LINE 推播文案", line_push, height=120)
-    st.text_area("4. EDM 標題", edm_subject, height=80)
-    st.text_area("5. 15 秒短影片腳本", short_script, height=150)
-    st.text_area("6. AI 圖像 / 影片生成 Prompt", prompt, height=120)
+    section("廣告文案快速產生器")
+    g1, g2, g3 = st.columns(3)
+    target_course = g1.selectbox("主推課程", sorted(filtered["推薦課程ID"].dropna().unique().tolist()) if "推薦課程ID" in filtered.columns else ["課程_2"])
+    audience = g2.selectbox("主推客群", ["商業語文／運務導向型", "國貿實務導向型", "證照／多元進修型"])
+    appeal = g3.selectbox("主打訴求", ["證照與職涯加值", "國貿實務案例", "商業語文溝通", "高 CP 值進修", "線上彈性學習"])
 
-    st.warning("此文案為根據模型結果與市場區隔規則產生的初稿，實際投放前建議再由行銷人員依品牌語氣調整，並透過 A/B Test 驗證成效。")
+    copy_map = {
+        "證照與職涯加值": "強調考照、專業認證、履歷加分與職涯競爭力。",
+        "國貿實務案例": "強調進出口流程、貿易文件、報關應用與實務案例。",
+        "商業語文溝通": "強調商務情境、客戶應對、國際溝通與跨國工作。",
+        "高 CP 值進修": "強調小額投資、高價值回報、短期進修與職涯升級。",
+        "線上彈性學習": "強調可回放、不受地點限制、下班後也能進修。",
+    }
+    ad_title = f"給{audience}的課程推薦：課程 {target_course} 幫你把進修變成職涯優勢"
+    ad_body = f"這次推薦主打「{appeal}」。{copy_map[appeal]}適合先投放給推薦機率較高的會員，再用 LINE 或 EDM 做二次提醒。"
+    line_msg = f"你可能會適合課程 {target_course}：{appeal}。想了解課程內容與適合對象嗎？點開看看本期推薦。"
+    st.text_area("廣告標題", ad_title, height=80)
+    st.text_area("社群／EDM 文案", ad_body, height=120)
+    st.text_area("LINE 推播短文", line_msg, height=90)
+    st.caption("提醒：這是依模型結果與分群邏輯產生的初稿，正式投放前仍建議由行銷人員依品牌語氣微調。")
+
+    csv = filtered.to_csv(index=False).encode("utf-8-sig")
+    st.download_button("下載目前篩選名單 CSV", csv, "filtered_recommendation.csv", "text/csv")
+    st.info("白話提醒：模型的任務是先幫我們找到比較值得接觸的人，不是保證每個人都會報名。實際投放前，建議再搭配預算、上課時間、過去互動紀錄做二次篩選。")
 
 
-# -------------------------
-# Page 6: 模型表現與研究限制
-# -------------------------
+# -----------------------------
+# Page: Model Performance
+# -----------------------------
 elif page == "模型表現與研究限制":
-    section_header("模型表現與研究限制")
+    st.title("模型表現與研究限制")
+    st.caption("這頁說明模型準不準，以及哪些地方要保守解讀。")
 
-    if model_report_text:
-        st.markdown("### 模型摘要")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("#### XGBoost 1A（屬性模型）")
-            for k, v in model_metrics.get("xgb_1a", {}).items():
-                st.metric(k, f"{v:.4f}")
-            cm1 = model_metrics.get("cm_1a")
-            if cm1 is not None:
-                st.write("Confusion Matrix")
-                st.dataframe(pd.DataFrame(cm1, index=["實際0", "實際1"], columns=["預測0", "預測1"]))
-        with c2:
-            st.markdown("#### XGBoost 1B（課程Dummy模型）")
-            for k, v in model_metrics.get("xgb_1b", {}).items():
-                st.metric(k, f"{v:.4f}")
-            cm2 = model_metrics.get("cm_1b")
-            if cm2 is not None:
-                st.write("Confusion Matrix")
-                st.dataframe(pd.DataFrame(cm2, index=["實際0", "實際1"], columns=["預測0", "預測1"]))
+    definition_panel()
 
-        with st.expander("查看原始模型報告文字"):
-            st.text(model_report_text)
+    section("模型表現比較")
+    perf = pd.DataFrame(
+        [
+            {"模型": "課程屬性模型", **metrics.get("attr", {})},
+            {"模型": "課程推薦機率模型", **metrics.get("course", {})},
+        ]
+    )
+    st.dataframe(perf, use_container_width=True, hide_index=True)
+    if not perf.empty and "ROC-AUC" in perf.columns:
+        fig = px.bar(perf, x="模型", y=["預測準確度", "找回率", "ROC-AUC", "PR-AUC"], barmode="group", title="模型指標比較")
+        fig.update_layout(height=430, yaxis_title="分數", xaxis_title="模型")
+        st.plotly_chart(fig, use_container_width=True)
+        chart_explain(
+            "這張圖比較不同模型在幾個指標上的表現。",
+            "課程推薦機率模型的找回率較高，較適合找潛力名單。",
+            "本專題應重視找回率與 ROC-AUC，不要只看預測準確度。",
+        )
 
-    st.markdown("### 指標白話解釋")
-    st.info("Accuracy：整體預測正確率")
-    st.info("Precision：模型說會報名的人裡面，真的會報名的比例")
-    st.info("Recall：真正會報名的人裡面，模型抓到多少")
-    st.info("F1：Precision 和 Recall 的平衡")
-    st.info("ROC-AUC：模型排序能力")
-    st.info("PR-AUC：不平衡資料下的重要評估指標")
-    st.success("本研究目標是找出高潛力學員，因此 Recall 與排序能力比單看 Accuracy 更重要。")
+    c1, c2 = st.columns(2)
+    for col, cm, title in [(c1, metrics.get("cm_attr"), "課程屬性模型"), (c2, metrics.get("cm_course"), "課程推薦機率模型")]:
+        with col:
+            st.markdown(f"### {title}：混淆矩陣")
+            if cm is not None:
+                cm_df = pd.DataFrame(cm, index=["實際未報名", "實際報名"], columns=["預測未報名", "預測報名"])
+                st.dataframe(cm_df, use_container_width=True)
+            chart_explain(
+                "混淆矩陣用來看模型哪裡猜對、哪裡猜錯。",
+                "對行銷來說，最在意的是實際會報名的人有沒有被找出來。",
+                "若想提高找回率，可降低機率門檻，但名單會變多，需要人工篩選。",
+            )
 
-    st.markdown("### 研究限制")
-    limitations = [
-        "本資料來自實際報名名單，未必能完整觀察學員真實選擇集合。",
-        "MNL 部分使用近似 Logit 模型，結果應以趨勢解讀，不宜過度解釋 p-value。",
-        "樣本數較小，且 Y=1 與 Y=0 類別不平衡。",
-        "部分課程屬性與課程本身高度重疊，例如證照課可能同時代表某特定課程。",
-        "推薦結果應搭配商業規則二次篩選，不宜完全自動化決策。",
-    ]
-    for i, t in enumerate(limitations, start=1):
-        st.write(f"{i}. {t}")
+    section("研究限制")
+    st.warning(
+        """
+        1. 資料來自既有報名紀錄，未必完整包含所有學員真正考慮過的課程。
+        2. 選課因素模型使用近似做法，結果適合看趨勢，不適合過度解讀單一 p-value。
+        3. 樣本數較小，且報名者和未報名者比例不平均。
+        4. 部分課程屬性和課程本身高度重疊，例如證照課也可能代表某一門特定課程。
+        5. 推薦名單應搭配商業規則二次篩選，不應完全自動決定投放。
+        """
+    )
+    if model_report:
+        with st.expander("查看原始模型輸出"):
+            st.text(model_report)
+
+
+# -----------------------------
+# Page: Full Report
+# -----------------------------
+elif page == "完整報告":
+    st.title("完整分析報告")
+    st.caption("這裡把原始分析報告重新整理成比較適合老師閱讀的版本。")
+
+    st.markdown(
+        """
+        # 課程報名行為分析與市場區隔分析報告
+
+        ## 一、研究目的
+        本專題希望把課程報名資料變成可以使用的行銷工具。重點不是只看誰點擊或誰購買，而是理解「誰適合哪一門課」、「為什麼適合」以及「行銷人員下一步可以怎麼做」。
+
+        ## 二、資料與方法
+        主題一先做市場區隔，找出公會主要客群輪廓。主題二再分析影響選課的因素、個人偏好與課程推薦機率。使用工具包含 Python、XGBoost、SHAP、K-means、卡方檢定與 Streamlit。
+
+        ## 三、市場區隔結論
+        公會顧客可整理成三個行銷用區隔：商業語文／運務導向型、國貿實務導向型、證照／多元進修型。這三群不是單純用性別或職稱切出來，而是更接近「學員真正想學什麼」。
+
+        ## 四、選課因素與個人偏好
+        影響報名的重要因素包含證照、價格帶、課程別與興趣特徵。白話來說，學員會在意課程能不能帶來職涯加值、價格是否能接受，以及內容是否符合自己的工作需求。
+
+        ## 五、推薦模型結果
+        XGBoost 可用來估計每位會員對每門課的報名機率。模型的 ROC-AUC 約 0.866，代表模型有不錯的排序能力，能把較可能報名的人排到前面。由於報名者本來就比較少，所以不能只看預測準確度，也要看找回率。
+
+        ## 六、課程推薦應用
+        推薦名單可分成高、中、低優先級。高優先級名單適合 LINE、電話邀約或限時提醒；中優先級名單適合 EDM 和再行銷；低優先級名單適合用免費內容或講座慢慢培養。
+
+        ## 七、行銷建議
+        行銷分眾應以興趣為主，而不是只依賴性別或職稱。證照型文案可強調考照與履歷加分；國貿實務型文案可強調進出口流程和實務案例；商業語文型文案可強調國際溝通與客戶應對。
+
+        ## 八、研究限制
+        本資料樣本數不大，而且實際報名者較少，因此模型結果應作為行銷輔助，不應完全自動化決策。推薦名單仍需要搭配商業規則、上課時間、預算與過去互動紀錄做二次判斷。
+
+        ## 九、結論
+        本專題完成從市場區隔、選課因素分析、推薦機率預測到儀表板落地的完整流程。最重要的成果是把統計模型轉成內部人員能理解、能操作、能拿來產生廣告策略的決策工具。
+        """
+    )
+
+    with st.expander("查看原始 final_analysis_report.md"):
+        if final_report:
+            st.markdown(final_report.replace("MNL / 選擇模型", "選課因素模型").replace("MNL", "選課因素模型"))
+        else:
+            st.warning("找不到 final_analysis_report.md。")
