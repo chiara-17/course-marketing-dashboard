@@ -271,8 +271,8 @@ def definition_panel():
             - **預測準確度（Accuracy）**：全部預測裡面，答對的比例。
             - **找回率（Recall）**：真正會報名的人裡，模型抓到多少。這對找潛力名單很重要。
             - **命中率（Precision）**：模型說會報名的人裡，真的會報名的比例。
-            - **ROC-AUC**：模型把「比較可能報名的人」排在前面的能力。越接近 1 越好，0.5 接近亂猜。
-            - **PR-AUC**：在報名者很少的情況下，更能看出模型找潛力名單的能力。
+            - **ROC-AUC**：模型排序能力，也就是能不能把「比較可能報名的人」排在前面。越接近 1 越好，0.5 代表接近亂猜。
+            - **PR-AUC**：在真正會報名的人比較少時，用來看模型抓高潛力名單是否穩定。
             - **SHAP**：用來解釋模型為什麼做出某個預測，幫我們看每個因素是加分還是扣分。
             - **K-means**：把相似學員分到同一群，方便規劃不同的行銷訊息。
             - **卡方檢定**：用來檢查「分群」和「興趣、性別、職稱」之間有沒有明顯關係。
@@ -340,27 +340,27 @@ if page == "總覽":
     with col_a:
         st.markdown(
             """
-            <div class="finding-card"><b>1. 公會顧客可拆成三個行銷區隔。</b><br>
-            分別是商業語文／運務導向型、國貿實務導向型、證照／多元進修型。</div>
+            <div class="finding-card"><b>1. 公會顧客可整理成三個行銷輪廓。</b><br>
+            分別是商業語文／運務導向型、國貿實務導向型、證照／多元進修型。這是把模型結果轉成方便行銷使用的分眾方式。</div>
             <div class="finding-card"><b>2. 市場差異主要來自興趣，不是性別或職稱。</b><br>
             卡方檢定顯示「主要興趣」與「國貿實務興趣」和分群有明顯關係。</div>
             <div class="finding-card"><b>3. 證照與價格帶是報名判斷的重要訊號。</b><br>
             這表示課程包裝可以把「考照價值」和「進修預算」講得更清楚。</div>
-            <div class="finding-card"><b>4. 推薦模型適合先圈出高潛力名單。</b><br>
-            模型不是用來直接取代業務判斷，而是幫行銷人員先縮小名單範圍。</div>
+            <div class="finding-card"><b>4. 推薦模型適合先整理優先聯絡名單。</b><br>
+            模型不會保證每個人都報名，但能幫行銷人員先找出比較值得接觸的人。</div>
             """,
             unsafe_allow_html=True,
         )
     with col_b:
         seg = normalize_cluster_profile(cluster_df)
-        fig = px.bar(seg, x="市場區隔", y="估計人數", color="市場區隔", title="三個可執行市場區隔")
+        fig = px.bar(seg, x="市場區隔", y="估計人數", color="市場區隔", title="三個行銷策略輪廓")
         fig.update_layout(showlegend=False, height=430, margin=dict(l=20, r=20, t=70, b=120))
         fig.update_xaxes(tickangle=-18, automargin=True)
         fig.update_yaxes(title="估計人數")
         st.plotly_chart(fig, use_container_width=True)
         chart_explain(
             "柱子越高，代表這類顧客越多。",
-            "目前可以用三個行銷輪廓來規劃文案與課程推薦。",
+            "目前可以把顧客需求整理成三個行銷輪廓，用來規劃文案與課程推薦。",
             "後續投放時，建議不同客群使用不同主打訊息。",
         )
 
@@ -384,22 +384,23 @@ elif page == "市場區隔與輪廓":
 
     seg = normalize_cluster_profile(cluster_df)
     section("三個行銷用市場區隔")
+    st.info("說明：原始 K-means 模型輸出以 K=2 較穩定；為了符合行銷操作需求，儀表板再依照興趣特徵與卡方檢定結果，整理成三個更容易落地的顧客輪廓。")
     st.dataframe(seg, use_container_width=True, hide_index=True)
 
     left, right = st.columns(2)
     with left:
-        fig = px.bar(seg, x="市場區隔", y="估計人數", color="市場區隔", title="各市場區隔估計人數")
+        fig = px.bar(seg, x="市場區隔", y="估計人數", color="市場區隔", title="各行銷輪廓估計人數")
         fig.update_layout(showlegend=False, height=430, margin=dict(l=20, r=20, t=70, b=120))
         fig.update_xaxes(tickangle=-18, automargin=True)
         fig.update_yaxes(title="估計人數")
         st.plotly_chart(fig, use_container_width=True)
         chart_explain(
             "柱狀圖用來比較三種顧客輪廓的規模。",
-            "公會顧客不是單一樣貌，至少可用三種需求來溝通。",
+            "公會顧客不是單一樣貌，至少可以用三種需求來規劃溝通方式。",
             "課程頁與廣告素材應分別準備三套主軸。",
         )
     with right:
-        fig = px.pie(seg, names="市場區隔", values="估計人數", title="各市場區隔比例")
+        fig = px.pie(seg, names="市場區隔", values="估計人數", title="各行銷輪廓比例")
         fig.update_layout(height=430, margin=dict(l=20, r=20, t=70, b=30))
         st.plotly_chart(fig, use_container_width=True)
         chart_explain(
@@ -432,8 +433,8 @@ elif page == "市場區隔與輪廓":
             "kmeans_silhouette_plot.png",
             "Silhouette Score",
             "分數越高，代表群和群之間越分得開。",
-            "本資料用 K=2 較穩，但為了行銷落地，儀表板補成三個可執行輪廓。",
-            "後續可增加更多行為資料，讓三群模型更穩定。",
+            "本資料用 K=2 較穩；三個輪廓是把模型結果再轉成行銷可操作的版本。",
+            "後續可增加更多行為資料，讓正式分群更細緻、更穩定。",
         )
     with img_cols[2]:
         show_image_with_explain(
@@ -663,7 +664,7 @@ elif page == "課程推薦與廣告策略":
 
     csv = filtered.to_csv(index=False).encode("utf-8-sig")
     st.download_button("下載目前篩選名單 CSV", csv, "filtered_recommendation.csv", "text/csv")
-    st.info("白話提醒：模型的任務是先幫我們找到比較值得接觸的人，不是保證每個人都會報名。實際投放前，建議再搭配預算、上課時間、過去互動紀錄做二次篩選。")
+    st.info("提醒：模型的任務是先幫我們找到比較值得接觸的人，不是保證每個人都會報名。實際投放前，建議再搭配預算、上課時間、過去互動紀錄做二次篩選。")
 
 
 # -----------------------------
@@ -726,7 +727,7 @@ elif page == "模型表現與研究限制":
 # -----------------------------
 elif page == "完整報告":
     st.title("完整分析報告")
-    st.caption("這裡把原始分析報告重新整理成比較適合老師閱讀的版本。")
+    st.caption("這裡把原始分析報告重新整理成比較適合簡報與審查閱讀的版本。")
 
     st.markdown(
         """
@@ -745,7 +746,7 @@ elif page == "完整報告":
         影響報名的重要因素包含證照、價格帶、課程別與興趣特徵。白話來說，學員會在意課程能不能帶來職涯加值、價格是否能接受，以及內容是否符合自己的工作需求。
 
         ## 五、推薦模型結果
-        XGBoost 可用來估計每位會員對每門課的報名機率。模型的 ROC-AUC 約 0.866，代表模型有不錯的排序能力，能把較可能報名的人排到前面。由於報名者本來就比較少，所以不能只看預測準確度，也要看找回率。
+        XGBoost 可用來估計每位會員對每門課的報名機率。模型的 ROC-AUC 約 0.866，代表模型有不錯的排序能力，能把較可能報名的人排到前面。由於真正報名的人本來就比較少，所以不能只看預測準確度，也要看找回率。
 
         ## 六、課程推薦應用
         推薦名單可分成高、中、低優先級。高優先級名單適合 LINE、電話邀約或限時提醒；中優先級名單適合 EDM 和再行銷；低優先級名單適合用免費內容或講座慢慢培養。
