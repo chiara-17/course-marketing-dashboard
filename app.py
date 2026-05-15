@@ -38,8 +38,30 @@ if not outputs_path.exists():
 st.markdown(
     """
     <style>
-    .main .block-container {padding-top: 1.4rem; max-width: 1360px;}
+    .main .block-container {padding-top: 1.1rem; max-width: 1380px;}
     h1, h2, h3 {letter-spacing: 0;}
+    .hero-card {
+        border: 1px solid #d8e2f0;
+        background: linear-gradient(135deg, #eff6ff 0%, #ffffff 58%, #f8fafc 100%);
+        color: #111827 !important;
+        border-radius: 16px;
+        padding: 1.15rem 1.35rem;
+        margin: .25rem 0 1rem 0;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, .07);
+    }
+    .hero-card * {color: #111827 !important;}
+    .metric-card {
+        border: 1px solid #dbe3ef;
+        background: #ffffff;
+        color: #111827 !important;
+        border-radius: 12px;
+        padding: .9rem 1rem;
+        min-height: 98px;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, .04);
+    }
+    .metric-card * {color: #111827 !important;}
+    .metric-label {font-size: .92rem; color: #64748b !important;}
+    .metric-value {font-size: 1.75rem; font-weight: 750; margin-top: .25rem; line-height: 1.15;}
     .action-card {
         border: 1px solid #dbe3ef;
         border-left: 5px solid #2563eb;
@@ -60,6 +82,16 @@ st.markdown(
     }
     .explain-box * {color: #111827 !important;}
     .small-note {font-size: .92rem; color: #64748b; line-height: 1.55;}
+    .term-pill {
+        display: inline-block;
+        background: #eef2ff;
+        color: #1e3a8a !important;
+        border: 1px solid #c7d2fe;
+        border-radius: 999px;
+        padding: .18rem .55rem;
+        margin: .15rem .25rem .15rem 0;
+        font-size: .88rem;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -160,6 +192,33 @@ def section(title: str, desc: str = ""):
         st.caption(desc)
 
 
+def page_header(title: str, desc: str, action: str = ""):
+    action_html = f"<br><b>現在要做：</b>{action}" if action else ""
+    st.markdown(
+        f"""
+        <div class="hero-card">
+            <h1 style="margin:0 0 .35rem 0;">{title}</h1>
+            <div>{desc}{action_html}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def metric_card(label: str, value, note: str = ""):
+    note_html = f"<div class='small-note'>{note}</div>" if note else ""
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-label">{label}</div>
+            <div class="metric-value">{value}</div>
+            {note_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def explain_box(how: str, finding: str, action: str):
     st.markdown(
         f"""
@@ -179,6 +238,33 @@ def show_image(file_name: str, title: str, how: str, finding: str, action: str):
     if img is not None:
         st.image(img, use_container_width=True)
     explain_box(how, finding, action)
+
+
+def render_markdown_file(file_name: str, title: str):
+    text = safe_read_txt(outputs_path / file_name)
+    with st.expander(title, expanded=False):
+        if text:
+            st.markdown(text)
+        else:
+            st.warning(f"尚未找到 {file_name}，請確認 outputs 資料夾是否有此檔案。")
+
+
+def render_all_markdown_files():
+    md_files = sorted(outputs_path.glob("*.md"))
+    with st.expander("查看 outputs 資料夾內所有 Markdown 文件", expanded=False):
+        if not md_files:
+            st.info("目前 outputs 資料夾沒有 Markdown 文件。")
+        for p in md_files:
+            st.markdown(f"### {p.name}")
+            text = safe_read_txt(p)
+            st.markdown(text if text else "此檔案目前無法讀取。")
+            st.divider()
+
+
+def show_terms(terms: dict[str, str]):
+    st.markdown("### 先看名詞，不用猜")
+    for name, desc in terms.items():
+        st.markdown(f"<span class='term-pill'>{name}</span> {desc}", unsafe_allow_html=True)
 
 
 # -----------------------------
@@ -258,11 +344,15 @@ def priority_label(prob: float) -> str:
 def infer_segment(row: pd.Series) -> str:
     reason = str(row.get("推薦原因", ""))
     course_id = str(row.get("推薦課程ID", ""))
-    if "證照" in reason:
-        return "證照／多元進修型"
-    if course_id in {"2", "3"}:
+    if course_id.endswith(".0"):
+        course_id = course_id[:-2]
+    if course_id in {"3", "5", "6", "8"}:
         return "國貿實務導向型"
     if course_id in {"4", "7"}:
+        return "商業語文／運務導向型"
+    if "國貿" in reason:
+        return "國貿實務導向型"
+    if "商業語文" in reason or "數位" in reason:
         return "商業語文／運務導向型"
     return "證照／多元進修型"
 
@@ -366,8 +456,11 @@ st.sidebar.caption(f"資料來源：{outputs_path.resolve()}")
 # 1. 行銷總覽
 # -----------------------------
 if page == "行銷總覽":
-    st.title("行銷總覽")
-    st.caption("把模型結果轉成今天可以執行的會員名單、課程主打與通路建議。")
+    page_header(
+        "行銷總覽",
+        "這頁只回答三件事：今天要優先聯絡誰、主推哪門課、用什麼賣點說服會員。",
+        "先處理高潛力名單，再依客群套用文案與通路。",
+    )
 
     learners = top1_exec["學員ID"].nunique() if "學員ID" in top1_exec.columns else 0
     courses = top3_exec["推薦課程ID"].nunique() if "推薦課程ID" in top3_exec.columns else 0
@@ -376,13 +469,46 @@ if page == "行銷總覽":
     top_course = top1_exec["推薦課程名稱"].mode().iloc[0] if "推薦課程名稱" in top1_exec.columns and not top1_exec.empty else "N/A"
     roc = metrics.get("course", {}).get("ROC-AUC", np.nan)
 
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-    c1.metric("總會員數", learners)
-    c2.metric("課程數", courses)
-    c3.metric("高潛力名單", high_count)
-    c4.metric("中潛力名單", mid_count)
-    c5.metric("Top 推薦課程", top_course)
-    c6.metric("排序能力 ROC-AUC", f"{roc:.3f}" if not pd.isna(roc) else "N/A")
+    c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1.8])
+    with c1:
+        metric_card("總會員數", learners, "目前可被推薦的會員")
+    with c2:
+        metric_card("課程數", courses, "模型可推薦的課程")
+    with c3:
+        metric_card("高潛力名單", high_count, "建議先用 LINE 或電話")
+    with c4:
+        metric_card("中潛力名單", mid_count, "建議用 EDM 培養")
+    with c5:
+        metric_card("本週主推課程", top_course, "最多會員被推薦的課程")
+
+    show_terms(
+        {
+            "高潛力名單": "模型判斷比較可能報名的人，適合優先聯絡。",
+            "中潛力名單": "有興趣但需要更多資訊的人，適合用 EDM 或再行銷慢慢培養。",
+            "ROC-AUC": "模型的排序能力。越接近 1，越能把可能報名的人排在前面。",
+        }
+    )
+
+    if not top1_exec.empty:
+        st.markdown("### 今天先看這三張圖")
+        g1, g2, g3 = st.columns(3)
+        with g1:
+            priority_counts = top1_exec["優先級"].value_counts().rename_axis("優先級").reset_index(name="人數")
+            fig = px.bar(priority_counts, x="優先級", y="人數", color="優先級", title="名單優先級分布")
+            st.plotly_chart(fig, use_container_width=True)
+            explain_box("看高、中、低潛力各有多少人。", "高潛力名單是最值得先處理的一群。", "先排 LINE 或電話聯絡高潛力會員。")
+        with g2:
+            course_counts = top1_exec["推薦課程名稱"].value_counts().head(8).rename_axis("課程名稱").reset_index(name="推薦人數")
+            fig = px.bar(course_counts, x="推薦人數", y="課程名稱", orientation="h", title="最多人被推薦的課程")
+            fig.update_layout(yaxis={"categoryorder": "total ascending"})
+            st.plotly_chart(fig, use_container_width=True)
+            explain_box("看哪門課被最多會員推薦。", f"目前最值得主推的是 {top_course}。", "把它放在 EDM、LINE 或首頁主視覺。")
+        with g3:
+            segment_source = top3_exec if not top3_exec.empty else top1_exec
+            segment_counts = segment_source["客群"].value_counts().rename_axis("客群").reset_index(name="人數")
+            fig = px.pie(segment_counts, names="客群", values="人數", title="會員主要客群")
+            st.plotly_chart(fig, use_container_width=True)
+            explain_box("看會員主要分成哪幾群。", "分群重點是興趣與學習目的，不是性別或職稱。", "每一群用不同文案，不要同一封訊息打全部人。")
 
     left, right = st.columns([1.05, 1])
     with left:
@@ -399,18 +525,26 @@ if page == "行銷總覽":
         st.markdown("### 模型發現轉成行銷語言")
         st.dataframe(points, use_container_width=True, hide_index=True)
 
-    if not top1_exec.empty:
-        fig = px.histogram(top1_exec, x="優先級", color="優先級", title="推薦名單優先級分布")
-        st.plotly_chart(fig, use_container_width=True)
-        explain_box("看高、中、低潛力名單各有多少人。", "這能決定本週行銷資源要放在哪一層會員。", "先處理高潛力，再用 EDM 培養中低潛力。")
+    render_markdown_file("final_analysis_report.md", "查看 final_analysis_report.md 完整 Markdown 報告")
+    render_all_markdown_files()
 
 
 # -----------------------------
 # 2. 高潛力推薦名單
 # -----------------------------
 elif page == "高潛力推薦名單":
-    st.title("高潛力推薦名單")
-    st.caption("把推薦機率轉成可執行的會員聯絡清單。")
+    page_header(
+        "高潛力推薦名單",
+        "這頁是業務與行銷最常用的名單頁。你可以直接篩出某門課、某個客群、某個機率以上的會員。",
+        "下載篩選後名單，拿去做 LINE、EDM、電話或再行銷。",
+    )
+    show_terms(
+        {
+            "預測報名機率": "模型估計這位會員對該課程的報名可能性。",
+            "優先級": "把機率翻成行動順序：高＝先聯絡，中＝培養，低＝內容觸及。",
+            "客群": "依會員興趣和推薦課程整理出的行銷分眾。",
+        }
+    )
 
     source = st.radio("名單類型", ["Top1：每位會員最推薦一門課", "Top3：每位會員前三推薦課"], horizontal=True)
     data = top1_exec if source.startswith("Top1") else top3_exec
@@ -466,8 +600,11 @@ elif page == "高潛力推薦名單":
 # 3. 單一課程作戰室
 # -----------------------------
 elif page == "單一課程作戰室":
-    st.title("單一課程作戰室")
-    st.caption("選一門課，立刻看目標會員、主打賣點與建議通路。")
+    page_header(
+        "單一課程作戰室",
+        "選一門課後，系統會整理這門課最適合打哪些會員、主打什麼賣點、用什麼通路。",
+        "適合課程開賣前做投放簡報，也適合每週行銷會議使用。",
+    )
 
     if top3_exec.empty:
         st.warning("找不到 Top3 推薦名單。")
@@ -518,8 +655,18 @@ elif page == "單一課程作戰室":
 # 4. 客群洞察與市場區隔
 # -----------------------------
 elif page == "客群洞察與市場區隔":
-    st.title("客群洞察與市場區隔")
-    st.caption("把 Cluster 轉成企業能使用的客群名稱與文案方向。")
+    page_header(
+        "客群洞察與市場區隔",
+        "這頁把分群結果翻成行銷人看得懂的客群輪廓：誰是主要客群、在意什麼、該用什麼文案。",
+        "不要用同一套文案打所有人，先依客群改主打賣點。",
+    )
+    show_terms(
+        {
+            "市場區隔": "把會員依需求和興趣分成幾群，讓行銷訊息更精準。",
+            "K-means": "一種分群方法，會把行為或興趣相似的人放在同一群。",
+            "卡方檢定": "用來確認某個特徵和客群差異有沒有明顯關係。",
+        }
+    )
 
     st.markdown("### 三個可執行客群")
     st.dataframe(SEGMENTS, use_container_width=True, hide_index=True)
@@ -577,8 +724,11 @@ elif page == "客群洞察與市場區隔":
 # 5. AI 文案與素材產生器
 # -----------------------------
 elif page == "AI 文案與素材產生器":
-    st.title("AI 文案與素材產生器")
-    st.caption("不用串 API，先用規則式模板產生可交給行銷人員修改的初稿。")
+    page_header(
+        "AI 文案與素材產生器",
+        "根據課程、客群、賣點、平台和語氣，自動產生可修改的文案初稿。",
+        "先用這裡產生第一版，再由行銷人員調整品牌語氣。",
+    )
 
     c1, c2, c3 = st.columns(3)
     courses = sorted(top3_exec["推薦課程名稱"].dropna().unique().tolist()) if not top3_exec.empty else ["課程 2｜線上證照實務班"]
@@ -599,8 +749,19 @@ elif page == "AI 文案與素材產生器":
 # 6. 成效追蹤與 A/B Test
 # -----------------------------
 elif page == "成效追蹤與 A/B Test":
-    st.title("成效追蹤與 A/B Test")
-    st.caption("上傳投放結果，追蹤不同客群、通路和文案方向的實際表現。")
+    page_header(
+        "成效追蹤與 A/B Test",
+        "這頁用來追蹤投放後的結果，看看哪個通路、哪個客群、哪種文案比較有效。",
+        "每次活動結束後上傳 campaign_result.csv，累積下一次優化依據。",
+    )
+    show_terms(
+        {
+            "開信率": "收到訊息的人裡，有多少人打開來看。",
+            "點擊率": "收到訊息的人裡，有多少人點了連結。",
+            "報名率": "收到訊息的人裡，有多少人完成報名。",
+            "轉換率": "點擊連結的人裡，有多少人最後報名。",
+        }
+    )
 
     sample = pd.DataFrame(
         [
@@ -641,8 +802,11 @@ elif page == "成效追蹤與 A/B Test":
 # 7. 模型解釋與安全使用
 # -----------------------------
 elif page == "模型解釋與安全使用":
-    st.title("模型解釋與安全使用")
-    st.caption("保留模型圖表，但把技術結果翻成行銷可以使用的語言。")
+    page_header(
+        "模型解釋與安全使用",
+        "這頁保留模型圖表，但只用來回答：哪些因素會影響推薦、要怎麼翻成行銷賣點。",
+        "模型是輔助工具，不是自動決策工具。",
+    )
 
     section("指標怎麼用")
     st.markdown(
