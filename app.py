@@ -293,7 +293,6 @@ top1_df = read_csv_no_warning(outputs_path / "topic1_recommendation_top1.csv")
 top3_df = read_csv_no_warning(outputs_path / "topic1_recommendation_top3.csv")
 cluster_df = read_csv_no_warning(outputs_path / "topic2_cluster_profile.csv")
 chi_df = read_csv_no_warning(outputs_path / "topic2_chi_square_results.csv")
-final_report = safe_read_txt(outputs_path / "final_analysis_report.md")
 
 
 # -----------------------------
@@ -305,10 +304,9 @@ page = st.sidebar.radio(
     [
         "總覽",
         "市場區隔與輪廓",
-        "選課因素與個人偏好",
+        "宏觀與微觀選課分析",
         "課程推薦與廣告策略",
-        "模型表現與研究限制",
-        "完整報告",
+        "成效指標說明",
     ],
 )
 st.sidebar.markdown("---")
@@ -320,7 +318,7 @@ st.sidebar.caption(f"資料來源：{outputs_path.resolve()}")
 # -----------------------------
 if page == "總覽":
     st.title("課程精準行銷與會員推薦儀表板")
-    st.caption("把分析結果翻成內部人員看得懂、用得上的行銷決策工具。")
+    st.caption("給企業內部使用的會員分眾、課程推薦與廣告行動工具。")
 
     learners = top1_df["學員ID"].nunique() if top1_df is not None and "學員ID" in top1_df.columns else 95
     top1_count = len(top1_df) if top1_df is not None else 0
@@ -341,13 +339,13 @@ if page == "總覽":
         st.markdown(
             """
             <div class="finding-card"><b>1. 公會顧客可整理成三個行銷輪廓。</b><br>
-            分別是商業語文／運務導向型、國貿實務導向型、證照／多元進修型。這是把模型結果轉成方便行銷使用的分眾方式。</div>
-            <div class="finding-card"><b>2. 市場差異主要來自興趣，不是性別或職稱。</b><br>
-            卡方檢定顯示「主要興趣」與「國貿實務興趣」和分群有明顯關係。</div>
-            <div class="finding-card"><b>3. 證照與價格帶是報名判斷的重要訊號。</b><br>
-            這表示課程包裝可以把「考照價值」和「進修預算」講得更清楚。</div>
-            <div class="finding-card"><b>4. 推薦模型適合先整理優先聯絡名單。</b><br>
-            模型不會保證每個人都報名，但能幫行銷人員先找出比較值得接觸的人。</div>
+            商業語文／運務導向型：重視工作溝通與商務情境。國貿實務導向型：重視進出口流程與職場即戰力。證照／多元進修型：重視履歷加分與職涯升級。</div>
+            <div class="finding-card"><b>2. 分眾重點要看興趣，不要只看性別或職稱。</b><br>
+            資料顯示「主要興趣」和「國貿實務興趣」更能區分顧客需求。</div>
+            <div class="finding-card"><b>3. 課程包裝要把證照價值與價格帶講清楚。</b><br>
+            證照、價格區間和課程類型會影響會員是否願意報名。</div>
+            <div class="finding-card"><b>4. 推薦名單可作為優先聯絡清單。</b><br>
+            行銷人員可先從高機率會員開始投放，再依預算、時間與互動紀錄做二次篩選。</div>
             """,
             unsafe_allow_html=True,
         )
@@ -368,7 +366,7 @@ if page == "總覽":
     st.markdown(
         """
         1. 先看「市場區隔與輪廓」，了解公會主要顧客是誰。
-        2. 再看「選課因素與個人偏好」，知道什麼因素會影響報名。
+        2. 再看「宏觀與微觀選課分析」，知道市場整體和個別會員各自受什麼因素影響。
         3. 最後到「課程推薦與廣告策略」，產生可落地的名單與文案方向。
         """
     )
@@ -477,9 +475,15 @@ elif page == "市場區隔與輪廓":
 # -----------------------------
 # Page: Factors and Preference
 # -----------------------------
-elif page == "選課因素與個人偏好":
-    st.title("主題二：影響學員選課的決定性屬性與個人偏好")
-    st.caption("這頁回答：哪些課程特色、學員興趣、課程類型會影響報名？")
+elif page == "宏觀與微觀選課分析":
+    st.title("主題二：影響學員選課的宏觀與微觀分析")
+    st.caption("宏觀看整體市場規律，微觀看每位會員為什麼可能被推薦某門課。")
+
+    macro_col, micro_col = st.columns(2)
+    with macro_col:
+        st.info("宏觀分析：看整體會員最在意哪些課程條件，例如證照、價格、課程形式與課程類型。這能幫助企業決定課程包裝與主打賣點。")
+    with micro_col:
+        st.info("微觀分析：看單一會員的興趣和背景如何影響推薦結果。這能幫助行銷人員寫出更像一對一溝通的推播內容。")
 
     section("重要因素總覽")
     if shap_df is not None:
@@ -670,32 +674,32 @@ elif page == "課程推薦與廣告策略":
 # -----------------------------
 # Page: Model Performance
 # -----------------------------
-elif page == "模型表現與研究限制":
-    st.title("模型表現與研究限制")
-    st.caption("這頁說明模型準不準，以及哪些地方要保守解讀。")
+elif page == "成效指標說明":
+    st.title("成效指標說明")
+    st.caption("這頁用企業看得懂的方式說明：推薦名單能不能幫我們排序會員、優先聯絡誰。")
 
     definition_panel()
 
-    section("模型表現比較")
+    section("推薦模型成效比較")
     perf = pd.DataFrame(
         [
-            {"模型": "課程屬性模型", **metrics.get("attr", {})},
-            {"模型": "課程推薦機率模型", **metrics.get("course", {})},
+            {"分析版本": "課程條件版", **metrics.get("attr", {})},
+            {"分析版本": "會員推薦版", **metrics.get("course", {})},
         ]
     )
     st.dataframe(perf, use_container_width=True, hide_index=True)
     if not perf.empty and "ROC-AUC" in perf.columns:
-        fig = px.bar(perf, x="模型", y=["預測準確度", "找回率", "ROC-AUC", "PR-AUC"], barmode="group", title="模型指標比較")
-        fig.update_layout(height=430, yaxis_title="分數", xaxis_title="模型")
+        fig = px.bar(perf, x="分析版本", y=["預測準確度", "找回率", "ROC-AUC", "PR-AUC"], barmode="group", title="推薦成效指標比較")
+        fig.update_layout(height=430, yaxis_title="分數", xaxis_title="分析版本")
         st.plotly_chart(fig, use_container_width=True)
         chart_explain(
-            "這張圖比較不同模型在幾個指標上的表現。",
-            "課程推薦機率模型的找回率較高，較適合找潛力名單。",
-            "本專題應重視找回率與 ROC-AUC，不要只看預測準確度。",
+            "這張圖比較不同分析版本在幾個營運指標上的表現。",
+            "會員推薦版的找回率較高，較適合整理優先聯絡名單。",
+            "企業使用時應重視找回率與 ROC-AUC，不要只看預測準確度。",
         )
 
     c1, c2 = st.columns(2)
-    for col, cm, title in [(c1, metrics.get("cm_attr"), "課程屬性模型"), (c2, metrics.get("cm_course"), "課程推薦機率模型")]:
+    for col, cm, title in [(c1, metrics.get("cm_attr"), "課程條件版"), (c2, metrics.get("cm_course"), "會員推薦版")]:
         with col:
             st.markdown(f"### {title}：混淆矩陣")
             if cm is not None:
@@ -707,63 +711,13 @@ elif page == "模型表現與研究限制":
                 "若想提高找回率，可降低機率門檻，但名單會變多，需要人工篩選。",
             )
 
-    section("研究限制")
-    st.warning(
+    section("企業使用建議")
+    st.success(
         """
-        1. 資料來自既有報名紀錄，未必完整包含所有學員真正考慮過的課程。
-        2. 選課因素模型使用近似做法，結果適合看趨勢，不適合過度解讀單一 p-value。
-        3. 樣本數較小，且報名者和未報名者比例不平均。
-        4. 部分課程屬性和課程本身高度重疊，例如證照課也可能代表某一門特定課程。
-        5. 推薦名單應搭配商業規則二次篩選，不應完全自動決定投放。
-        """
-    )
-    if model_report:
-        with st.expander("查看原始模型輸出"):
-            st.text(model_report)
-
-
-# -----------------------------
-# Page: Full Report
-# -----------------------------
-elif page == "完整報告":
-    st.title("完整分析報告")
-    st.caption("這裡把原始分析報告重新整理成比較適合簡報與審查閱讀的版本。")
-
-    st.markdown(
-        """
-        # 課程報名行為分析與市場區隔分析報告
-
-        ## 一、研究目的
-        本專題希望把課程報名資料變成可以使用的行銷工具。重點不是只看誰點擊或誰購買，而是理解「誰適合哪一門課」、「為什麼適合」以及「行銷人員下一步可以怎麼做」。
-
-        ## 二、資料與方法
-        主題一先做市場區隔，找出公會主要客群輪廓。主題二再分析影響選課的因素、個人偏好與課程推薦機率。使用工具包含 Python、XGBoost、SHAP、K-means、卡方檢定與 Streamlit。
-
-        ## 三、市場區隔結論
-        公會顧客可整理成三個行銷用區隔：商業語文／運務導向型、國貿實務導向型、證照／多元進修型。這三群不是單純用性別或職稱切出來，而是更接近「學員真正想學什麼」。
-
-        ## 四、選課因素與個人偏好
-        影響報名的重要因素包含證照、價格帶、課程別與興趣特徵。白話來說，學員會在意課程能不能帶來職涯加值、價格是否能接受，以及內容是否符合自己的工作需求。
-
-        ## 五、推薦模型結果
-        XGBoost 可用來估計每位會員對每門課的報名機率。模型的 ROC-AUC 約 0.866，代表模型有不錯的排序能力，能把較可能報名的人排到前面。由於真正報名的人本來就比較少，所以不能只看預測準確度，也要看找回率。
-
-        ## 六、課程推薦應用
-        推薦名單可分成高、中、低優先級。高優先級名單適合 LINE、電話邀約或限時提醒；中優先級名單適合 EDM 和再行銷；低優先級名單適合用免費內容或講座慢慢培養。
-
-        ## 七、行銷建議
-        行銷分眾應以興趣為主，而不是只依賴性別或職稱。證照型文案可強調考照與履歷加分；國貿實務型文案可強調進出口流程和實務案例；商業語文型文案可強調國際溝通與客戶應對。
-
-        ## 八、研究限制
-        本資料樣本數不大，而且實際報名者較少，因此模型結果應作為行銷輔助，不應完全自動化決策。推薦名單仍需要搭配商業規則、上課時間、預算與過去互動紀錄做二次判斷。
-
-        ## 九、結論
-        本專題完成從市場區隔、選課因素分析、推薦機率預測到儀表板落地的完整流程。最重要的成果是把統計模型轉成內部人員能理解、能操作、能拿來產生廣告策略的決策工具。
+        1. 高機率會員：優先用 LINE、電話或限時提醒聯絡。
+        2. 中機率會員：適合 EDM、再行銷廣告與課程比較內容。
+        3. 低機率會員：先用免費講座、懶人包或測驗培養興趣。
+        4. 每次投放後，把實際報名結果回填，後續推薦名單會更精準。
         """
     )
 
-    with st.expander("查看原始 final_analysis_report.md"):
-        if final_report:
-            st.markdown(final_report.replace("MNL / 選擇模型", "選課因素模型").replace("MNL", "選課因素模型"))
-        else:
-            st.warning("找不到 final_analysis_report.md。")
