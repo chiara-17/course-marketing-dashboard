@@ -224,6 +224,27 @@ SEGMENTS = pd.DataFrame(
 )
 
 
+COURSE_NAME_MAP = {
+    "1": "課程 1｜實體證照實務班",
+    "2": "課程 2｜線上證照實務班",
+    "3": "課程 3｜線上國貿實務班",
+    "4": "課程 4｜實體商業語文班",
+    "5": "課程 5｜實體國貿實務班",
+    "6": "課程 6｜線上國貿實務班",
+    "7": "課程 7｜線上數位實務班",
+    "8": "課程 8｜線上稅務實務班",
+}
+
+
+def course_name(course_id) -> str:
+    if pd.isna(course_id):
+        return "未指定課程"
+    text = str(course_id).strip()
+    if text.endswith(".0"):
+        text = text[:-2]
+    return COURSE_NAME_MAP.get(text, f"課程 {text}")
+
+
 def priority_label(prob: float) -> str:
     if pd.isna(prob):
         return "低"
@@ -258,12 +279,12 @@ def channel_for(priority: str, segment: str) -> str:
 
 def copy_for(row: pd.Series) -> str:
     segment = row.get("客群", "會員")
-    course = row.get("推薦課程ID", "")
+    course = row.get("推薦課程名稱", course_name(row.get("推薦課程ID", "")))
     if "國貿" in segment:
-        return f"推薦課程 {course}：用案例快速補強進出口流程與職場即戰力。"
+        return f"{course}：用案例快速補強進出口流程與職場即戰力。"
     if "商業語文" in segment:
-        return f"推薦課程 {course}：強化商務溝通與客戶應對，讓工作場景更好用。"
-    return f"推薦課程 {course}：主打證照與職涯加值，適合想提升履歷競爭力的會員。"
+        return f"{course}：強化商務溝通與客戶應對，讓工作場景更好用。"
+    return f"{course}：主打證照與職涯加值，適合想提升履歷競爭力的會員。"
 
 
 def prepare_recommendations(df: Optional[pd.DataFrame]) -> pd.DataFrame:
@@ -274,6 +295,10 @@ def prepare_recommendations(df: Optional[pd.DataFrame]) -> pd.DataFrame:
         d["預測報名機率"] = pd.to_numeric(d["預測報名機率"], errors="coerce")
     else:
         d["預測報名機率"] = np.nan
+    if "推薦課程ID" in d.columns:
+        d["推薦課程名稱"] = d["推薦課程ID"].apply(course_name)
+    elif "推薦課程名稱" not in d.columns:
+        d["推薦課程名稱"] = "未指定課程"
     d["優先級"] = d["預測報名機率"].apply(priority_label)
     d["客群"] = d.apply(infer_segment, axis=1)
     d["建議通路"] = d.apply(lambda r: channel_for(r["優先級"], r["客群"]), axis=1)
@@ -348,7 +373,7 @@ if page == "行銷總覽":
     courses = top3_exec["推薦課程ID"].nunique() if "推薦課程ID" in top3_exec.columns else 0
     high_count = int((top1_exec["優先級"] == "高").sum()) if not top1_exec.empty else 0
     mid_count = int((top1_exec["優先級"] == "中").sum()) if not top1_exec.empty else 0
-    top_course = top1_exec["推薦課程ID"].mode().iloc[0] if "推薦課程ID" in top1_exec.columns and not top1_exec.empty else "N/A"
+    top_course = top1_exec["推薦課程名稱"].mode().iloc[0] if "推薦課程名稱" in top1_exec.columns and not top1_exec.empty else "N/A"
     roc = metrics.get("course", {}).get("ROC-AUC", np.nan)
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
@@ -394,8 +419,8 @@ elif page == "高潛力推薦名單":
         st.stop()
 
     f1, f2, f3, f4 = st.columns(4)
-    course_opts = sorted(data["推薦課程ID"].dropna().unique().tolist()) if "推薦課程ID" in data.columns else []
-    selected_courses = f1.multiselect("課程", course_opts, default=course_opts)
+    course_opts = sorted(data["推薦課程名稱"].dropna().unique().tolist()) if "推薦課程名稱" in data.columns else []
+    selected_courses = f1.multiselect("課程名稱", course_opts, default=course_opts)
     threshold = f2.slider("預測機率門檻", 0.0, 1.0, 0.0, 0.01)
     selected_priority = f3.multiselect("優先級", ["高", "中", "低"], default=["高", "中", "低"])
     selected_segments = f4.multiselect("客群", SEGMENTS["客群"].tolist(), default=SEGMENTS["客群"].tolist())
@@ -403,7 +428,7 @@ elif page == "高潛力推薦名單":
     filtered = data.copy()
     filtered = filtered[filtered["預測報名機率"] >= threshold]
     if selected_courses:
-        filtered = filtered[filtered["推薦課程ID"].isin(selected_courses)]
+        filtered = filtered[filtered["推薦課程名稱"].isin(selected_courses)]
     if selected_priority:
         filtered = filtered[filtered["優先級"].isin(selected_priority)]
     if selected_segments:
@@ -419,13 +444,13 @@ elif page == "高潛力推薦名單":
         st.warning("目前篩選條件下沒有名單。請降低預測機率門檻，或放寬課程、優先級、客群篩選。")
         st.stop()
 
-    cols = [c for c in ["學員ID", "推薦課程ID", "預測報名機率", "優先級", "客群", "推薦原因", "建議通路", "建議文案"] if c in filtered.columns]
+    cols = [c for c in ["學員ID", "推薦課程名稱", "預測報名機率", "優先級", "客群", "推薦原因", "建議通路", "建議文案"] if c in filtered.columns]
     st.dataframe(filtered[cols], use_container_width=True, hide_index=True)
 
     left, right = st.columns(2)
     with left:
-        course_counts = filtered["推薦課程ID"].value_counts().rename_axis("推薦課程ID").reset_index(name="推薦次數")
-        fig = px.bar(course_counts, x="推薦課程ID", y="推薦次數", title="各課程被推薦次數")
+        course_counts = filtered["推薦課程名稱"].value_counts().rename_axis("推薦課程名稱").reset_index(name="推薦次數")
+        fig = px.bar(course_counts, x="推薦課程名稱", y="推薦次數", title="各課程被推薦次數")
         st.plotly_chart(fig, use_container_width=True)
         explain_box("柱子越高，代表越多會員被推薦該課程。", "可快速找出本週主推課程。", "推薦次數最高的課程適合做 EDM 主推。")
     with right:
@@ -433,7 +458,7 @@ elif page == "高潛力推薦名單":
         st.plotly_chart(fig, use_container_width=True)
         explain_box("越靠右代表會員越可能報名。", "高機率名單適合優先聯絡。", "可把門檻調到 0.5 或 0.7 做分層投放。")
 
-    csv = filtered.to_csv(index=False).encode("utf-8-sig")
+    csv = filtered[cols].to_csv(index=False).encode("utf-8-sig")
     st.download_button("下載目前篩選後名單 CSV", csv, "filtered_marketing_leads.csv", "text/csv")
 
 
@@ -448,9 +473,9 @@ elif page == "單一課程作戰室":
         st.warning("找不到 Top3 推薦名單。")
         st.stop()
 
-    course_list = sorted(top3_exec["推薦課程ID"].dropna().unique().tolist())
+    course_list = sorted(top3_exec["推薦課程名稱"].dropna().unique().tolist())
     course = st.selectbox("選擇課程", course_list)
-    d = top3_exec[top3_exec["推薦課程ID"] == course].copy()
+    d = top3_exec[top3_exec["推薦課程名稱"] == course].copy()
     high = d[d["優先級"] == "高"]
     target = high if not high.empty else d
 
@@ -481,7 +506,7 @@ elif page == "單一課程作戰室":
     )
 
     st.markdown("### 該課程高潛力學員表格")
-    show_cols = [c for c in ["學員ID", "推薦課程ID", "預測報名機率", "優先級", "客群", "推薦原因", "建議通路", "建議文案"] if c in target.columns]
+    show_cols = [c for c in ["學員ID", "推薦課程名稱", "預測報名機率", "優先級", "客群", "推薦原因", "建議通路", "建議文案"] if c in target.columns]
     st.dataframe(target.sort_values("預測報名機率", ascending=False)[show_cols], use_container_width=True, hide_index=True)
 
     fig = px.histogram(d, x="客群", color="優先級", title="該課程推薦客群分布")
@@ -556,7 +581,7 @@ elif page == "AI 文案與素材產生器":
     st.caption("不用串 API，先用規則式模板產生可交給行銷人員修改的初稿。")
 
     c1, c2, c3 = st.columns(3)
-    courses = sorted(top3_exec["推薦課程ID"].dropna().unique().tolist()) if not top3_exec.empty else ["課程_2"]
+    courses = sorted(top3_exec["推薦課程名稱"].dropna().unique().tolist()) if not top3_exec.empty else ["課程 2｜線上證照實務班"]
     course = c1.selectbox("課程", courses)
     segment = c2.selectbox("客群", SEGMENTS["客群"].tolist())
     appeal = c3.selectbox("主打賣點", ["證照", "職涯加值", "國貿實務", "商業語文", "高 CP 值", "線上彈性", "實務案例"])
