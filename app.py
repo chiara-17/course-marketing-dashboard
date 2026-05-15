@@ -60,16 +60,32 @@ st.markdown(
     .finding-card {
         border-left: 5px solid #2563eb;
         background: #f8fbff;
+        color: #111827;
         padding: .9rem 1rem;
         border-radius: 6px;
         margin-bottom: .65rem;
     }
+    .finding-card b {
+        color: #0f172a;
+    }
     .explain-box {
         border: 1px solid #e2e8f0;
         background: #fbfdff;
+        color: #111827;
         border-radius: 8px;
         padding: .9rem 1rem;
         margin-bottom: .8rem;
+    }
+    .explain-box b {
+        color: #0f172a;
+    }
+    div[data-testid="stMarkdownContainer"] .finding-card,
+    div[data-testid="stMarkdownContainer"] .explain-box {
+        color: #111827 !important;
+    }
+    div[data-testid="stMarkdownContainer"] .finding-card *,
+    div[data-testid="stMarkdownContainer"] .explain-box * {
+        color: #111827 !important;
     }
     .small-note {
         color: #526071;
