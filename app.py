@@ -443,13 +443,14 @@ def dataframe_with_progress(df: pd.DataFrame, *, height: int | None = None):
             max_value=1.0,
             format="%.2f",
         )
-    st.dataframe(
-        df,
-        use_container_width=True,
-        hide_index=True,
-        height=height,
-        column_config=config,
-    )
+    dataframe_kwargs = {
+        "use_container_width": True,
+        "hide_index": True,
+        "column_config": config,
+    }
+    if height is not None:
+        dataframe_kwargs["height"] = height
+    st.dataframe(df, **dataframe_kwargs)
 
 
 def explain_box(how: str, finding: str, action: str):
