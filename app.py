@@ -1052,42 +1052,18 @@ elif page == "AI 文案與素材產生器":
         st.text_area(title, text, height=110 if "腳本" not in title else 150)
     st.info("此文案是初稿，正式投放前建議依品牌語氣調整，並用 A/B Test 驗證成效。")
 
-    st.markdown("### AI 圖像 Prompt 生成範例")
-    st.caption("以下範例可直接複製到 ChatGPT、Canva、Midjourney 或其他圖像生成工具，再依課程名稱與客群調整。")
-
-    prompt_1 = """請生成一張 1:1 方形課程廣告圖，風格為高質感深藍金色商務教育廣告。
-主題：課程 1｜實體證照實務班
-客群：商業語文／運務導向型
-主視覺：右側為專業講師在實體教室授課，學員坐在會議桌前聽講、筆電與教材可見。
-版面：左側深藍漸層大標題，右側實拍感教室場景，下方白色資訊卡區塊放 4 個 icon 賣點。
-標題文字：課程 1｜實體證照實務班
-副標：實務導向學習，提升職場專業力
-賣點 icon：考照準備、專業認證、履歷加分、職涯競爭力
-CTA 按鈕：立即報名
-色彩：深海軍藍、金色、白色，高級商務感，字體清楚、排版整齊、留白乾淨。"""
-
-    prompt_2 = """請生成一張 1:1 方形線上課程廣告圖，風格為高質感深藍金色 SaaS 教育廣告。
-主題：課程 3｜線上國貿實務班
-客群：國貿實務導向型
-主視覺：右側是一位學員戴耳機在電腦前上線上課，螢幕中有講師與國際貿易實務簡報。
-版面：左側深藍漸層大標題，右側線上學習情境，下方白色資訊卡呈現核心學習內容。
-標題文字：課程 3｜線上國貿實務班
-副標：掌握國貿核心實務，強化職場即戰力
-賣點 icon：進出口流程、貿易文件、報關應用、案例實戰
-CTA 按鈕：立即報名
-色彩：深海軍藍、金色、白色，專業、可信任、線上彈性學習，文字清楚可讀。"""
+    st.markdown("### AI 廣告素材範例")
+    st.caption("以下為可參考的課程廣告視覺範例，實際投放前可依品牌規範、課程名稱與活動檔期微調。")
 
     img_col1, img_col2 = st.columns(2)
     with img_col1:
         img = safe_load_asset("prompt_example_certificate.png")
         if img is not None:
             st.image(img, caption="範例 1：實體證照實務班視覺", use_container_width=True)
-        st.text_area("範例 Prompt 1：實體證照實務班", prompt_1, height=260)
     with img_col2:
         img = safe_load_asset("prompt_example_online_trade.png")
         if img is not None:
             st.image(img, caption="範例 2：線上國貿實務班視覺", use_container_width=True)
-        st.text_area("範例 Prompt 2：線上國貿實務班", prompt_2, height=260)
 
 
 # -----------------------------
