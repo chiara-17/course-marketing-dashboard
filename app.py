@@ -30,7 +30,7 @@ st.set_page_config(
 )
 
 px.defaults.template = "plotly_white"
-px.defaults.color_discrete_sequence = ["#DC2626", "#FB7185", "#991B1B", "#FCA5A5", "#64748B", "#E11D48"]
+px.defaults.color_discrete_sequence = ["#1B2E4B", "#E05643", "#E57362", "#6B7A90", "#F2B8A8", "#2F4858"]
 
 APP_DIR = Path(__file__).resolve().parent
 outputs_path = APP_DIR / "outputs"
@@ -42,29 +42,29 @@ st.markdown(
     """
     <style>
     :root {
-        --bg: #F8FAFC;
+        --bg: #F4F6F9;
         --card: #FFFFFF;
-        --red: #DC2626;
-        --red-strong: #E11D48;
-        --red-soft: #FEE2E2;
-        --red-faint: #FFF1F2;
+        --navy: #1B2E4B;
+        --sidebar: #212B36;
+        --accent: #E05643;
+        --accent-soft: #E57362;
+        --accent-faint: #FFF3F0;
         --ink: #1E293B;
         --muted: #64748B;
         --line: #E2E8F0;
         --shadow: 0 14px 36px rgba(15, 23, 42, .08);
-        --red-shadow: 0 18px 42px rgba(220, 38, 38, .18);
+        --accent-shadow: 0 18px 42px rgba(224, 86, 67, .20);
     }
     @keyframes pageSlideUp {
         from {opacity: 0; transform: translateY(18px);}
         to {opacity: 1; transform: translateY(0);}
     }
     @keyframes softGlow {
-        0%, 100% {box-shadow: 0 12px 32px rgba(220, 38, 38, .10);}
-        50% {box-shadow: 0 18px 48px rgba(220, 38, 38, .20);}
+        0%, 100% {box-shadow: 0 12px 32px rgba(224, 86, 67, .09);}
+        50% {box-shadow: 0 18px 48px rgba(224, 86, 67, .16);}
     }
     html, body, [data-testid="stAppViewContainer"] {
-        background: radial-gradient(circle at top right, rgba(254, 226, 226, .72), transparent 32%),
-                    linear-gradient(180deg, #FFFFFF 0%, var(--bg) 44%, #F1F5F9 100%) !important;
+        background: linear-gradient(180deg, #F9FBFD 0%, var(--bg) 45%, #EEF2F6 100%) !important;
         color: var(--ink) !important;
     }
     .main .block-container {
@@ -73,18 +73,29 @@ st.markdown(
         animation: pageSlideUp .55s ease-out both;
     }
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #FFFFFF 0%, #FFF7F7 100%) !important;
-        border-right: 1px solid #F1D4D4;
+        background: linear-gradient(180deg, #212B36 0%, #18222E 100%) !important;
+        border-right: 1px solid rgba(255,255,255,.08);
     }
-    [data-testid="stSidebar"] * {color: var(--ink) !important;}
+    [data-testid="stSidebar"] * {color: #DDE3EA !important;}
+    [data-testid="stSidebar"] h1 {color: #FFFFFF !important;}
+    [data-testid="stSidebar"] hr {border-color: rgba(255,255,255,.12) !important;}
+    [data-testid="stSidebar"] .stCaption, [data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+        color: rgba(221, 227, 234, .48) !important;
+        font-size: .78rem !important;
+        line-height: 1.45;
+    }
     [data-testid="stSidebar"] [role="radiogroup"] label {
         border-radius: 12px;
-        padding: .2rem .35rem;
+        padding: .28rem .45rem;
         transition: all .2s ease;
     }
     [data-testid="stSidebar"] [role="radiogroup"] label:hover {
-        background: #FFF1F2;
+        background: rgba(255,255,255,.08);
         transform: translateX(3px);
+    }
+    [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
+        background: rgba(224, 86, 67, .18);
+        box-shadow: inset 4px 0 0 var(--accent);
     }
     h1, h2, h3 {
         letter-spacing: -.02em;
@@ -92,28 +103,27 @@ st.markdown(
     }
     p, span, div, label {color: var(--ink);}
     .stButton > button, .stDownloadButton > button {
-        background: linear-gradient(135deg, var(--red) 0%, var(--red-strong) 100%) !important;
+        background: linear-gradient(135deg, var(--accent) 0%, #C84736 100%) !important;
         color: white !important;
         border: 0 !important;
         border-radius: 12px !important;
-        box-shadow: 0 10px 24px rgba(220, 38, 38, .22);
+        box-shadow: 0 10px 24px rgba(224, 86, 67, .22);
         transition: transform .18s ease, box-shadow .18s ease;
     }
     .stButton > button:hover, .stDownloadButton > button:hover {
         transform: translateY(-2px);
-        box-shadow: 0 16px 34px rgba(220, 38, 38, .30);
+        box-shadow: 0 16px 34px rgba(224, 86, 67, .30);
     }
     .hero-card {
         position: relative;
         overflow: hidden;
-        border: 1px solid #FECACA;
-        background: linear-gradient(135deg, #FFFFFF 0%, #FFF7F7 62%, #FFE4E6 100%);
+        border: 1px solid rgba(27, 46, 75, .08);
+        background: #FFFFFF;
         color: var(--ink) !important;
-        border-radius: 22px;
-        padding: 1.35rem 1.55rem;
-        margin: .25rem 0 1.05rem 0;
-        box-shadow: var(--shadow);
-        animation: softGlow 4s ease-in-out infinite;
+        border-radius: 12px;
+        padding: 1.28rem 1.45rem;
+        margin: .25rem 0 1.15rem 0;
+        box-shadow: 0 10px 26px rgba(27, 46, 75, .055);
     }
     .hero-card:before {
         content: "";
@@ -121,8 +131,8 @@ st.markdown(
         left: 0;
         top: 0;
         height: 100%;
-        width: 7px;
-        background: linear-gradient(180deg, var(--red), var(--red-strong));
+        width: 4px;
+        background: linear-gradient(180deg, var(--navy), var(--accent));
     }
     .hero-card * {color: #111827 !important;}
     .metric-card {
@@ -140,15 +150,57 @@ st.markdown(
     }
     .metric-card:hover {
         transform: translateY(-6px) scale(1.015);
-        border-color: #FDA4AF;
-        box-shadow: var(--red-shadow);
+        border-color: rgba(224, 86, 67, .34);
+        box-shadow: var(--accent-shadow);
     }
     .metric-card * {color: #111827 !important;}
     .metric-label {font-size: .92rem; color: #64748b !important;}
-    .metric-value {font-size: 1.75rem; font-weight: 800; margin-top: .25rem; line-height: 1.12; color: var(--red) !important;}
+    .metric-value {font-size: 1.75rem; font-weight: 800; margin-top: .25rem; line-height: 1.12; color: var(--navy) !important;}
+    .metric-card.dark {
+        background: linear-gradient(145deg, #1B2E4B 0%, #223B60 100%);
+        border-left-color: #E05643;
+    }
+    .metric-card.dark *, .metric-card.coral *, .metric-card.soft-coral * {color: #FFFFFF !important;}
+    .metric-card.dark .small-note, .metric-card.coral .small-note, .metric-card.soft-coral .small-note {color: rgba(255,255,255,.82) !important;}
+    .metric-card.dark .metric-label, .metric-card.coral .metric-label, .metric-card.soft-coral .metric-label {color: rgba(255,255,255,.78) !important;}
+    .metric-card.dark .metric-value, .metric-card.coral .metric-value, .metric-card.soft-coral .metric-value {color: #FFFFFF !important;}
+    .metric-card.coral {
+        background: linear-gradient(135deg, #E05643 0%, #CF4A39 100%);
+        border-left-color: #FFFFFF;
+        box-shadow: 0 16px 42px rgba(224, 86, 67, .28);
+    }
+    .metric-card.soft-coral {
+        background: linear-gradient(135deg, #E57362 0%, #D86656 100%);
+        border-left-color: #FFFFFF;
+    }
+    .metric-card.wide {
+        background: #FFFFFF;
+        border-left-color: var(--navy);
+    }
+    .metric-card.wide .metric-value {font-size: 1.45rem; color: var(--ink) !important;}
+    .tooltip-icon {
+        float: right;
+        display: inline-flex;
+        width: 18px;
+        height: 18px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        font-size: .72rem;
+        font-weight: 800;
+        background: rgba(255,255,255,.22);
+        color: #FFFFFF !important;
+        border: 1px solid rgba(255,255,255,.35);
+        cursor: help;
+    }
+    .metric-card.wide .tooltip-icon, .metric-card:not(.dark):not(.coral):not(.soft-coral) .tooltip-icon {
+        color: var(--accent) !important;
+        background: #FFF3F0;
+        border-color: #F5C1B8;
+    }
     .action-card {
-        border: 1px solid #FECACA;
-        border-left: 5px solid var(--red);
+        border: 1px solid rgba(27, 46, 75, .10);
+        border-left: 5px solid var(--accent);
         background: #FFFFFF;
         color: var(--ink) !important;
         border-radius: 16px;
@@ -157,10 +209,10 @@ st.markdown(
         box-shadow: 0 8px 22px rgba(15, 23, 42, .05);
         transition: transform .18s ease, box-shadow .18s ease;
     }
-    .action-card:hover {transform: translateY(-3px); box-shadow: 0 14px 32px rgba(220, 38, 38, .12);}
+    .action-card:hover {transform: translateY(-3px); box-shadow: 0 14px 32px rgba(27, 46, 75, .10);}
     .action-card * {color: #111827 !important;}
     .explain-box {
-        border: 1px solid #FECACA;
+        border: 1px solid rgba(27, 46, 75, .10);
         background: #ffffff;
         color: var(--ink) !important;
         border-radius: 14px;
@@ -181,13 +233,13 @@ st.markdown(
         font-size: .88rem;
     }
     .ai-banner {
-        border: 1px solid #FDA4AF;
-        background: linear-gradient(135deg, #FFF1F2 0%, #FFFFFF 50%, #FFE4E6 100%);
+        border: 1px solid rgba(224, 86, 67, .32);
+        background: linear-gradient(135deg, #FFF6F3 0%, #FFFFFF 52%, #F9E7E2 100%);
         color: var(--ink) !important;
         border-radius: 18px;
         padding: 1.15rem 1.25rem;
         margin: .8rem 0 1rem 0;
-        box-shadow: 0 16px 38px rgba(220, 38, 38, .12);
+        box-shadow: 0 16px 38px rgba(224, 86, 67, .12);
         position: relative;
         overflow: hidden;
     }
@@ -198,9 +250,16 @@ st.markdown(
         height: 140px;
         right: -42px;
         top: -58px;
-        background: radial-gradient(circle, rgba(225, 29, 72, .22), transparent 68%);
+        background: radial-gradient(circle, rgba(224, 86, 67, .22), transparent 68%);
     }
-    .ai-banner b, .red-strong {color: var(--red) !important; font-weight: 850;}
+    .ai-banner b, .red-strong {color: var(--accent) !important; font-weight: 850;}
+    div[data-testid="stPlotlyChart"] {
+        background: #FFFFFF;
+        border: 1px solid rgba(27, 46, 75, .08);
+        border-radius: 12px;
+        padding: .8rem .8rem .2rem .8rem;
+        box-shadow: 0 10px 26px rgba(27, 46, 75, .06);
+    }
     div[data-testid="stDataFrame"] {
         border-radius: 16px;
         overflow: hidden;
@@ -324,12 +383,13 @@ def page_header(title: str, desc: str, action: str = ""):
     )
 
 
-def metric_card(label: str, value, note: str = ""):
+def metric_card(label: str, value, note: str = "", variant: str = "", tooltip: str = ""):
     note_html = f"<div class='small-note'>{note}</div>" if note else ""
+    tooltip_html = f"<span class='tooltip-icon' title='{tooltip}'>i</span>" if tooltip else ""
     st.markdown(
         f"""
-        <div class="metric-card">
-            <div class="metric-label">{label}</div>
+        <div class="metric-card {variant}">
+            <div class="metric-label">{label}{tooltip_html}</div>
             <div class="metric-value">{value}</div>
             {note_html}
         </div>
@@ -338,13 +398,14 @@ def metric_card(label: str, value, note: str = ""):
     )
 
 
-def executive_kpi_cards(items: list[tuple[str, str, str]]):
+def executive_kpi_cards(items: list[tuple[str, str, str, str, str]]):
     cards = []
-    for label, value, note in items:
+    for label, value, note, variant, tooltip in items:
+        tooltip_html = f"<span class='tooltip-icon' title='{tooltip}'>i</span>" if tooltip else ""
         cards.append(
             f"""
-            <div class="metric-card">
-                <div class="metric-label">{label}</div>
+            <div class="metric-card {variant}">
+                <div class="metric-label">{label}{tooltip_html}</div>
                 <div class="metric-value">{value}</div>
                 <div class="small-note">{note}</div>
             </div>
@@ -643,26 +704,36 @@ if page == "行銷總覽":
 
     c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1.8])
     with c1:
-        metric_card("總會員數", learners, "目前可被推薦的會員")
+        metric_card("總會員數", learners, "目前可被推薦的會員", "dark")
     with c2:
-        metric_card("課程數", courses, "模型可推薦的課程")
+        metric_card("課程數", courses, "模型可推薦的課程", "dark")
     with c3:
-        metric_card("高潛力名單", high_count, "建議先用 LINE 或電話")
+        metric_card(
+            "高潛力名單",
+            high_count,
+            "建議先用 LINE 或電話",
+            "coral",
+            "模型判斷比較可能報名的人，適合優先聯絡。",
+        )
     with c4:
-        metric_card("中潛力名單", mid_count, "建議用 EDM 培養")
+        metric_card(
+            "中潛力名單",
+            mid_count,
+            "建議用 EDM 培養",
+            "soft-coral",
+            "有興趣但需要更多資訊的人，適合用 EDM 或再行銷慢慢培養。",
+        )
     with c5:
-        metric_card("本週主推課程", top_course, "最多會員被推薦的課程")
-
-    show_terms(
-        {
-            "高潛力名單": "模型判斷比較可能報名的人，適合優先聯絡。",
-            "中潛力名單": "有興趣但需要更多資訊的人，適合用 EDM 或再行銷慢慢培養。",
-            "ROC-AUC": "模型的排序能力。越接近 1，越能把可能報名的人排在前面。",
-        }
-    )
+        metric_card(
+            "本週主推課程",
+            top_course,
+            f"最多會員被推薦的課程；ROC-AUC {roc:.3f}" if not pd.isna(roc) else "最多會員被推薦的課程",
+            "wide",
+            "ROC-AUC 是模型排序能力，越接近 1，越能把可能報名的人排在前面。",
+        )
 
     if not top1_exec.empty:
-        st.markdown("### 今天先看這三張圖")
+        st.markdown("<h3 style='margin-bottom: 1.1rem;'>今天先看這三張圖</h3>", unsafe_allow_html=True)
         g1, g2, g3 = st.columns(3)
         with g1:
             priority_counts = top1_exec["優先級"].value_counts().rename_axis("優先級").reset_index(name="人數")
@@ -798,10 +869,10 @@ elif page == "單一課程作戰室":
 
     executive_kpi_cards(
         [
-            ("高潛力學員數", f"<span class='red-strong'>{len(high)}</span>", "建議今天優先聯絡的人數"),
-            ("平均預測機率", f"<span class='red-strong'>{avg_prob:.2f}</span>" if not pd.isna(avg_prob) else "N/A", "越高代表越值得優先投放"),
-            ("主要客群", f"<span class='red-strong'>{main_segment}</span>", "這門課最適合的會員類型"),
-            ("建議通路", f"<span class='red-strong'>{main_channel}</span>", "最適合啟動的溝通方式"),
+            ("高潛力學員數", f"<span class='red-strong'>{len(high)}</span>", "建議今天優先聯絡的人數", "coral", "模型判斷比較可能報名的人，適合優先聯絡。"),
+            ("平均預測機率", f"<span class='red-strong'>{avg_prob:.2f}</span>" if not pd.isna(avg_prob) else "N/A", "越高代表越值得優先投放", "dark", "模型估計會員對這門課的平均報名可能性。"),
+            ("主要客群", f"<span class='red-strong'>{main_segment}</span>", "這門課最適合的會員類型", "soft-coral", "依推薦課程與會員興趣整理出的分眾。"),
+            ("建議通路", f"<span class='red-strong'>{main_channel}</span>", "最適合啟動的溝通方式", "dark", "建議優先使用的會員觸及管道。"),
         ]
     )
 
