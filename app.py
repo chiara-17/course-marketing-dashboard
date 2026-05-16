@@ -13,6 +13,7 @@ streamlit run app.py
 from __future__ import annotations
 
 import re
+from html import escape
 from pathlib import Path
 from typing import Optional
 
@@ -371,64 +372,62 @@ def section(title: str, desc: str = ""):
 
 
 def page_header(title: str, desc: str, action: str = ""):
-    action_html = f"<br><b>現在要做：</b>{action}" if action else ""
-    st.markdown(
-        f"""
-        <div class="hero-card">
-            <h1 style="margin:0 0 .35rem 0;">{title}</h1>
-            <div>{desc}{action_html}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    action_html = f"<br><b>現在要做：</b>{escape(action)}" if action else ""
+    html = (
+        f'<div class="hero-card">'
+        f'<h1 style="margin:0 0 .35rem 0;">{escape(title)}</h1>'
+        f'<div>{escape(desc)}{action_html}</div>'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
+def tooltip_icon(text: str) -> str:
+    return f'<span class="tooltip-icon" title="{escape(text, quote=True)}">i</span>' if text else ""
+
+
+def html_text(value) -> str:
+    raw = str(value)
+    allowed = ("<span", "</span>")
+    if any(tag in raw for tag in allowed):
+        return raw
+    return escape(raw)
+
+
+def html_block(tag: str, content: str, class_name: str = "") -> str:
+    class_attr = f' class="{escape(class_name, quote=True)}"' if class_name else ""
+    return f"<{tag}{class_attr}>{content}</{tag}>"
+
+
+def html_card(label: str, value, note: str = "", variant: str = "", tooltip: str = "") -> str:
+    safe_variant = escape(variant, quote=True)
+    note_html = html_block("div", escape(note), "small-note") if note else ""
+    return (
+        f'<div class="metric-card {safe_variant}">'
+        f'<div class="metric-label">{escape(label)}{tooltip_icon(tooltip)}</div>'
+        f'<div class="metric-value">{html_text(value)}</div>'
+        f'{note_html}'
+        f'</div>'
     )
 
 
 def metric_card(label: str, value, note: str = "", variant: str = "", tooltip: str = ""):
-    note_html = f"<div class='small-note'>{note}</div>" if note else ""
-    tooltip_html = f"<span class='tooltip-icon' title='{tooltip}'>i</span>" if tooltip else ""
-    st.markdown(
-        f"""
-        <div class="metric-card {variant}">
-            <div class="metric-label">{label}{tooltip_html}</div>
-            <div class="metric-value">{value}</div>
-            {note_html}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown(html_card(label, value, note, variant, tooltip), unsafe_allow_html=True)
 
 
 def executive_kpi_cards(items: list[tuple[str, str, str, str, str]]):
-    cards = []
-    for label, value, note, variant, tooltip in items:
-        tooltip_html = f"<span class='tooltip-icon' title='{tooltip}'>i</span>" if tooltip else ""
-        cards.append(
-            f"""
-            <div class="metric-card {variant}">
-                <div class="metric-label">{label}{tooltip_html}</div>
-                <div class="metric-value">{value}</div>
-                <div class="small-note">{note}</div>
-            </div>
-            """
-        )
-    st.markdown(
-        f"""
-        <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: .4rem 0 1.15rem 0;">
-            {''.join(cards)}
-        </div>
-        """,
-        unsafe_allow_html=True,
+    cards = "".join(html_card(label, value, note, variant, tooltip) for label, value, note, variant, tooltip in items)
+    html = (
+        '<div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); '
+        'gap: 1rem; margin: .4rem 0 1.15rem 0;">'
+        f"{cards}</div>"
     )
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def ai_banner(title: str, body: str):
     st.markdown(
-        f"""
-        <div class="ai-banner">
-            <b>{title}</b><br>
-            {body}
-        </div>
-        """,
+        f'<div class="ai-banner"><b>{escape(title)}</b><br>{body}</div>',
         unsafe_allow_html=True,
     )
 
@@ -455,13 +454,9 @@ def dataframe_with_progress(df: pd.DataFrame, *, height: int | None = None):
 
 def explain_box(how: str, finding: str, action: str):
     st.markdown(
-        f"""
-        <div class="explain-box">
-        <b>怎麼看：</b>{how}<br>
-        <b>目前看到：</b>{finding}<br>
-        <b>下一步：</b>{action}
-        </div>
-        """,
+        f'<div class="explain-box"><b>怎麼看：</b>{escape(how)}<br>'
+        f'<b>目前看到：</b>{escape(finding)}<br>'
+        f'<b>下一步：</b>{escape(action)}</div>',
         unsafe_allow_html=True,
     )
 
