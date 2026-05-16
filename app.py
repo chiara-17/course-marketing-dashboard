@@ -25,9 +25,12 @@ from PIL import Image
 
 st.set_page_config(
     page_title="課程精準行銷與會員推薦儀表板",
-    page_icon="📊",
+    page_icon="◆",
     layout="wide",
 )
+
+px.defaults.template = "plotly_white"
+px.defaults.color_discrete_sequence = ["#DC2626", "#FB7185", "#991B1B", "#FCA5A5", "#64748B", "#E11D48"]
 
 APP_DIR = Path(__file__).resolve().parent
 outputs_path = APP_DIR / "outputs"
@@ -38,59 +41,175 @@ if not outputs_path.exists():
 st.markdown(
     """
     <style>
-    .main .block-container {padding-top: 1.1rem; max-width: 1380px;}
-    h1, h2, h3 {letter-spacing: 0;}
+    :root {
+        --bg: #F8FAFC;
+        --card: #FFFFFF;
+        --red: #DC2626;
+        --red-strong: #E11D48;
+        --red-soft: #FEE2E2;
+        --red-faint: #FFF1F2;
+        --ink: #1E293B;
+        --muted: #64748B;
+        --line: #E2E8F0;
+        --shadow: 0 14px 36px rgba(15, 23, 42, .08);
+        --red-shadow: 0 18px 42px rgba(220, 38, 38, .18);
+    }
+    @keyframes pageSlideUp {
+        from {opacity: 0; transform: translateY(18px);}
+        to {opacity: 1; transform: translateY(0);}
+    }
+    @keyframes softGlow {
+        0%, 100% {box-shadow: 0 12px 32px rgba(220, 38, 38, .10);}
+        50% {box-shadow: 0 18px 48px rgba(220, 38, 38, .20);}
+    }
+    html, body, [data-testid="stAppViewContainer"] {
+        background: radial-gradient(circle at top right, rgba(254, 226, 226, .72), transparent 32%),
+                    linear-gradient(180deg, #FFFFFF 0%, var(--bg) 44%, #F1F5F9 100%) !important;
+        color: var(--ink) !important;
+    }
+    .main .block-container {
+        padding-top: 1.05rem;
+        max-width: 1400px;
+        animation: pageSlideUp .55s ease-out both;
+    }
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #FFFFFF 0%, #FFF7F7 100%) !important;
+        border-right: 1px solid #F1D4D4;
+    }
+    [data-testid="stSidebar"] * {color: var(--ink) !important;}
+    [data-testid="stSidebar"] [role="radiogroup"] label {
+        border-radius: 12px;
+        padding: .2rem .35rem;
+        transition: all .2s ease;
+    }
+    [data-testid="stSidebar"] [role="radiogroup"] label:hover {
+        background: #FFF1F2;
+        transform: translateX(3px);
+    }
+    h1, h2, h3 {
+        letter-spacing: -.02em;
+        color: var(--ink) !important;
+    }
+    p, span, div, label {color: var(--ink);}
+    .stButton > button, .stDownloadButton > button {
+        background: linear-gradient(135deg, var(--red) 0%, var(--red-strong) 100%) !important;
+        color: white !important;
+        border: 0 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 10px 24px rgba(220, 38, 38, .22);
+        transition: transform .18s ease, box-shadow .18s ease;
+    }
+    .stButton > button:hover, .stDownloadButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 16px 34px rgba(220, 38, 38, .30);
+    }
     .hero-card {
-        border: 1px solid #d8e2f0;
-        background: linear-gradient(135deg, #eff6ff 0%, #ffffff 58%, #f8fafc 100%);
-        color: #111827 !important;
-        border-radius: 16px;
-        padding: 1.15rem 1.35rem;
-        margin: .25rem 0 1rem 0;
-        box-shadow: 0 10px 28px rgba(15, 23, 42, .07);
+        position: relative;
+        overflow: hidden;
+        border: 1px solid #FECACA;
+        background: linear-gradient(135deg, #FFFFFF 0%, #FFF7F7 62%, #FFE4E6 100%);
+        color: var(--ink) !important;
+        border-radius: 22px;
+        padding: 1.35rem 1.55rem;
+        margin: .25rem 0 1.05rem 0;
+        box-shadow: var(--shadow);
+        animation: softGlow 4s ease-in-out infinite;
+    }
+    .hero-card:before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        width: 7px;
+        background: linear-gradient(180deg, var(--red), var(--red-strong));
     }
     .hero-card * {color: #111827 !important;}
     .metric-card {
-        border: 1px solid #dbe3ef;
-        background: #ffffff;
-        color: #111827 !important;
-        border-radius: 12px;
-        padding: .9rem 1rem;
-        min-height: 98px;
-        box-shadow: 0 4px 14px rgba(15, 23, 42, .04);
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-left: 5px solid var(--red);
+        background: var(--card);
+        color: var(--ink) !important;
+        border-radius: 16px;
+        padding: 1rem 1.08rem;
+        min-height: 106px;
+        box-shadow: 0 10px 26px rgba(15, 23, 42, .06);
+        transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+    }
+    .metric-card:hover {
+        transform: translateY(-6px) scale(1.015);
+        border-color: #FDA4AF;
+        box-shadow: var(--red-shadow);
     }
     .metric-card * {color: #111827 !important;}
     .metric-label {font-size: .92rem; color: #64748b !important;}
-    .metric-value {font-size: 1.75rem; font-weight: 750; margin-top: .25rem; line-height: 1.15;}
+    .metric-value {font-size: 1.75rem; font-weight: 800; margin-top: .25rem; line-height: 1.12; color: var(--red) !important;}
     .action-card {
-        border: 1px solid #dbe3ef;
-        border-left: 5px solid #2563eb;
-        background: #f8fbff;
-        color: #111827 !important;
-        border-radius: 8px;
-        padding: .95rem 1.1rem;
+        border: 1px solid #FECACA;
+        border-left: 5px solid var(--red);
+        background: #FFFFFF;
+        color: var(--ink) !important;
+        border-radius: 16px;
+        padding: 1rem 1.1rem;
         margin-bottom: .75rem;
+        box-shadow: 0 8px 22px rgba(15, 23, 42, .05);
+        transition: transform .18s ease, box-shadow .18s ease;
     }
+    .action-card:hover {transform: translateY(-3px); box-shadow: 0 14px 32px rgba(220, 38, 38, .12);}
     .action-card * {color: #111827 !important;}
     .explain-box {
-        border: 1px solid #dbe3ef;
+        border: 1px solid #FECACA;
         background: #ffffff;
-        color: #111827 !important;
-        border-radius: 8px;
+        color: var(--ink) !important;
+        border-radius: 14px;
         padding: .9rem 1rem;
         margin: .65rem 0 1rem 0;
+        box-shadow: 0 7px 20px rgba(15, 23, 42, .05);
     }
     .explain-box * {color: #111827 !important;}
     .small-note {font-size: .92rem; color: #64748b; line-height: 1.55;}
     .term-pill {
         display: inline-block;
-        background: #eef2ff;
-        color: #1e3a8a !important;
-        border: 1px solid #c7d2fe;
+        background: #FFF1F2;
+        color: #B91C1C !important;
+        border: 1px solid #FECDD3;
         border-radius: 999px;
         padding: .18rem .55rem;
         margin: .15rem .25rem .15rem 0;
         font-size: .88rem;
+    }
+    .ai-banner {
+        border: 1px solid #FDA4AF;
+        background: linear-gradient(135deg, #FFF1F2 0%, #FFFFFF 50%, #FFE4E6 100%);
+        color: var(--ink) !important;
+        border-radius: 18px;
+        padding: 1.15rem 1.25rem;
+        margin: .8rem 0 1rem 0;
+        box-shadow: 0 16px 38px rgba(220, 38, 38, .12);
+        position: relative;
+        overflow: hidden;
+    }
+    .ai-banner:after {
+        content: "";
+        position: absolute;
+        width: 140px;
+        height: 140px;
+        right: -42px;
+        top: -58px;
+        background: radial-gradient(circle, rgba(225, 29, 72, .22), transparent 68%);
+    }
+    .ai-banner b, .red-strong {color: var(--red) !important; font-weight: 850;}
+    div[data-testid="stDataFrame"] {
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, .06);
+        border: 1px solid #E2E8F0;
+    }
+    @media (max-width: 900px) {
+        .main .block-container {padding-left: 1rem; padding-right: 1rem;}
+        .metric-card {min-height: auto;}
     }
     </style>
     """,
@@ -216,6 +335,59 @@ def metric_card(label: str, value, note: str = ""):
         </div>
         """,
         unsafe_allow_html=True,
+    )
+
+
+def executive_kpi_cards(items: list[tuple[str, str, str]]):
+    cards = []
+    for label, value, note in items:
+        cards.append(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">{label}</div>
+                <div class="metric-value">{value}</div>
+                <div class="small-note">{note}</div>
+            </div>
+            """
+        )
+    st.markdown(
+        f"""
+        <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: .4rem 0 1.15rem 0;">
+            {''.join(cards)}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def ai_banner(title: str, body: str):
+    st.markdown(
+        f"""
+        <div class="ai-banner">
+            <b>{title}</b><br>
+            {body}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def dataframe_with_progress(df: pd.DataFrame, *, height: int | None = None):
+    config = {}
+    if "預測報名機率" in df.columns:
+        config["預測報名機率"] = st.column_config.ProgressColumn(
+            "預測報名機率",
+            help="模型估計這位會員對推薦課程的報名可能性；越滿代表越值得優先聯絡。",
+            min_value=0.0,
+            max_value=1.0,
+            format="%.2f",
+        )
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        height=height,
+        column_config=config,
     )
 
 
@@ -523,7 +695,7 @@ if page == "行銷總覽":
     with right:
         points = marketing_points()
         st.markdown("### 模型發現轉成行銷語言")
-        st.dataframe(points, use_container_width=True, hide_index=True)
+        dataframe_with_progress(points)
 
     render_markdown_file("final_analysis_report.md", "查看 final_analysis_report.md 完整 Markdown 報告")
     render_all_markdown_files()
@@ -579,7 +751,7 @@ elif page == "高潛力推薦名單":
         st.stop()
 
     cols = [c for c in ["學員ID", "推薦課程名稱", "預測報名機率", "優先級", "客群", "推薦原因", "建議通路", "建議文案"] if c in filtered.columns]
-    st.dataframe(filtered[cols], use_container_width=True, hide_index=True)
+    dataframe_with_progress(filtered[cols], height=420)
 
     left, right = st.columns(2)
     with left:
@@ -624,27 +796,26 @@ elif page == "單一課程作戰室":
     main_interest = segment_row["主要興趣"].iloc[0] if not segment_row.empty else "N/A"
     main_appeal = segment_row["建議賣點"].iloc[0] if not segment_row.empty else "N/A"
 
-    a, b, c, e = st.columns(4)
-    a.metric("高潛力學員數", len(high))
-    b.metric("平均預測機率", f"{avg_prob:.2f}" if not pd.isna(avg_prob) else "N/A")
-    c.metric("主要客群", main_segment)
-    e.metric("建議通路", main_channel)
+    executive_kpi_cards(
+        [
+            ("高潛力學員數", f"<span class='red-strong'>{len(high)}</span>", "建議今天優先聯絡的人數"),
+            ("平均預測機率", f"<span class='red-strong'>{avg_prob:.2f}</span>" if not pd.isna(avg_prob) else "N/A", "越高代表越值得優先投放"),
+            ("主要客群", f"<span class='red-strong'>{main_segment}</span>", "這門課最適合的會員類型"),
+            ("建議通路", f"<span class='red-strong'>{main_channel}</span>", "最適合啟動的溝通方式"),
+        ]
+    )
 
     st.markdown("### 課程行銷策略摘要")
-    st.markdown(
-        f"""
-        <div class="action-card">
-        這門課目前最適合先投放給 <b>{main_segment}</b>。主要興趣是 <b>{main_interest}</b>，
-        建議賣點是 <b>{main_appeal}</b>。通路可先使用 <b>{main_channel}</b>，
-        文案方向可用：「{main_copy}」
-        </div>
-        """,
-        unsafe_allow_html=True,
+    ai_banner(
+        "AI 策略摘要",
+        f"這門課目前最適合先投放給 <b>{main_segment}</b>。主要興趣是 <b>{main_interest}</b>，"
+        f"建議賣點是 <b>{main_appeal}</b>。通路可先使用 <b>{main_channel}</b>。"
+        f"<br>文案方向可用：「{main_copy}」",
     )
 
     st.markdown("### 該課程高潛力學員表格")
-    show_cols = [c for c in ["學員ID", "推薦課程名稱", "預測報名機率", "優先級", "客群", "推薦原因", "建議通路", "建議文案"] if c in target.columns]
-    st.dataframe(target.sort_values("預測報名機率", ascending=False)[show_cols], use_container_width=True, hide_index=True)
+    show_cols = [c for c in ["學員ID", "推薦課程名稱", "預測報名機率", "優先級", "客群", "建議通路", "建議文案"] if c in target.columns]
+    dataframe_with_progress(target.sort_values("預測報名機率", ascending=False)[show_cols], height=420)
 
     fig = px.histogram(d, x="客群", color="優先級", title="該課程推薦客群分布")
     st.plotly_chart(fig, use_container_width=True)
@@ -669,14 +840,14 @@ elif page == "客群洞察與市場區隔":
     )
 
     st.markdown("### 三個可執行客群")
-    st.dataframe(SEGMENTS, use_container_width=True, hide_index=True)
+    dataframe_with_progress(SEGMENTS)
 
     if cluster_df is not None:
         raw = cluster_df.copy()
         if "cluster" in raw.columns:
             raw["行銷命名"] = raw["cluster"].map({0: "商業語文／運務導向型", 1: "多元進修／一般潛力型"}).fillna("其他客群")
         st.markdown("### 原始分群結果")
-        st.dataframe(raw, use_container_width=True, hide_index=True)
+        dataframe_with_progress(raw)
 
     strategy_plot = SEGMENTS.copy()
     strategy_plot["投放優先順序"] = [3, 2, 1]
@@ -702,7 +873,7 @@ elif page == "客群洞察與市場區隔":
         columns=["客群", "文案主軸", "優先通路", "推薦課程方向"],
     )
     st.markdown("### 客群 × 文案矩陣")
-    st.dataframe(matrix, use_container_width=True, hide_index=True)
+    dataframe_with_progress(matrix)
 
     img_cols = st.columns(3)
     with img_cols[0]:
@@ -716,7 +887,7 @@ elif page == "客群洞察與市場區隔":
         display = chi_df.rename(columns={"variable": "檢定項目", "p_value": "p-value", "significant(p<0.05)": "是否顯著"}).copy()
         display["是否顯著"] = display["是否顯著"].map({1: "顯著", 0: "不顯著"})
         st.markdown("### 客群差異來源")
-        st.dataframe(display[[c for c in ["檢定項目", "p-value", "是否顯著"] if c in display.columns]], use_container_width=True, hide_index=True)
+        dataframe_with_progress(display[[c for c in ["檢定項目", "p-value", "是否顯著"] if c in display.columns]])
         explain_box("p-value 低於 0.05 代表該特徵能區分客群。", "主要興趣與國貿實務興趣較有區分力。", "分眾行銷先看興趣，再看職稱。")
 
 
@@ -774,7 +945,7 @@ elif page == "成效追蹤與 A/B Test":
     if upload is None:
         st.info("尚未上傳成效資料。請使用下方格式建立 campaign_result.csv。")
         result = sample.copy()
-        st.dataframe(sample, use_container_width=True, hide_index=True)
+        dataframe_with_progress(sample)
     else:
         result = pd.read_csv(upload)
 
@@ -792,7 +963,7 @@ elif page == "成效追蹤與 A/B Test":
     result["轉換率"] = result["報名數"] / result["點擊數"].replace(0, np.nan)
 
     st.markdown("### 成效表")
-    st.dataframe(result, use_container_width=True, hide_index=True)
+    dataframe_with_progress(result)
     fig = px.bar(result, x="campaign_id", y=["開信率", "點擊率", "報名率", "轉換率"], barmode="group", title="不同活動成效比較")
     st.plotly_chart(fig, use_container_width=True)
     explain_box("比較不同 campaign 的開信、點擊、報名與轉換。", "可找出哪個通路或文案更有效。", "未來可把結果回填，讓推薦模型和分眾規則更準。")
@@ -826,7 +997,7 @@ elif page == "模型解釋與安全使用":
         explain_box("越長代表越常影響推薦結果。", "證照、價格區間、課程型態和興趣是主要訊號。", "把它們翻成職涯加值、案例實戰、彈性學習等行銷賣點。")
 
     st.markdown("### 行銷翻譯表")
-    st.dataframe(marketing_points(), use_container_width=True, hide_index=True)
+    dataframe_with_progress(marketing_points())
 
     tab1, tab2 = st.tabs(["課程條件與個人偏好", "推薦模型與成效"])
     with tab1:
