@@ -254,6 +254,51 @@ st.markdown(
         background: radial-gradient(circle, rgba(224, 86, 67, .22), transparent 68%);
     }
     .ai-banner b, .red-strong {color: var(--accent) !important; font-weight: 850;}
+    .profile-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem;
+        margin: .75rem 0 1.2rem 0;
+    }
+    .profile-card {
+        background: #FFFFFF;
+        border: 1px solid rgba(27, 46, 75, .10);
+        border-top: 5px solid var(--accent);
+        border-radius: 16px;
+        padding: 1.1rem 1.15rem;
+        box-shadow: 0 10px 26px rgba(27, 46, 75, .06);
+        min-height: 230px;
+    }
+    .profile-card h4 {
+        margin: 0 0 .55rem 0;
+        color: var(--navy) !important;
+        font-size: 1.05rem;
+    }
+    .profile-card .tag {
+        display: inline-block;
+        background: #FFF3F0;
+        color: var(--accent) !important;
+        border-radius: 999px;
+        padding: .12rem .5rem;
+        margin: .1rem .15rem .35rem 0;
+        font-size: .82rem;
+        font-weight: 700;
+    }
+    .profile-card p {
+        margin: .28rem 0;
+        line-height: 1.55;
+        color: var(--ink) !important;
+    }
+    .profile-card b {color: var(--navy) !important;}
+    .management-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+        margin-top: .8rem;
+    }
+    @media (max-width: 900px) {
+        .profile-grid, .management-grid {grid-template-columns: 1fr;}
+    }
     div[data-testid="stPlotlyChart"] {
         background: #FFFFFF;
         border: 1px solid rgba(27, 46, 75, .08);
@@ -432,6 +477,57 @@ def ai_banner(title: str, body: str):
     )
 
 
+def segment_profile_cards():
+    profiles = [
+        {
+            "title": "第一群：證照／多元進修型",
+            "tags": ["多元探索", "價格敏感", "入門引導"],
+            "interest": "興趣較分散，對證照、管理、財會與一般進修都有可能接觸。",
+            "price": "偏好 3000 以下或低門檻方案。",
+            "behavior": "報名頻次較低，需要更多信任與誘因。",
+            "strategy": "用免費講座、體驗課、入門方案與廣度觸及先養名單。",
+        },
+        {
+            "title": "第二群：國貿實務型",
+            "tags": ["國貿實務", "證照需求", "高轉換"],
+            "interest": "集中於國貿、進出口流程、貿易文件、報關與證照。",
+            "price": "可接受 4000-5000，若看見實用價值可再提高。",
+            "behavior": "報名意願較高，也較可能出現複購行為。",
+            "strategy": "主推深度課程、組合方案與實務案例，搭配 LINE 或電話邀約。",
+        },
+        {
+            "title": "第三群：商業語文型",
+            "tags": ["商業語文", "職場應用", "深度課程"],
+            "interest": "集中於商業語文、商務溝通、客戶應對與國際工作情境。",
+            "price": "可接受 4000-5000，但需要清楚看到職場實用性。",
+            "behavior": "報名頻次較高，適合推進階或系列課程。",
+            "strategy": "強調職場立即可用、國際溝通力與客戶應對能力。",
+        },
+    ]
+    cards = []
+    for p in profiles:
+        tags = "".join(f'<span class="tag">{escape(t)}</span>' for t in p["tags"])
+        cards.append(
+            f'<div class="profile-card"><h4>{escape(p["title"])}</h4>{tags}'
+            f'<p><b>主要興趣：</b>{escape(p["interest"])}</p>'
+            f'<p><b>價格敏感度：</b>{escape(p["price"])}</p>'
+            f'<p><b>報名行為：</b>{escape(p["behavior"])}</p>'
+            f'<p><b>落地策略：</b>{escape(p["strategy"])}</p></div>'
+        )
+    st.markdown(f'<div class="profile-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+
+
+def management_cards():
+    items = [
+        ("先分眾，再投放", "會員不是同一種人。先用三個客群拆開，再設計不同課程主打與文案。"),
+        ("先抓高潛力，再培養中低潛力", "高潛力用 LINE 或電話，中潛力用 EDM，低潛力用內容慢慢養。"),
+        ("課程主打要說人話", "證照要說成職涯加值，國貿要說成案例實戰，線上要說成彈性學習。"),
+        ("用成效資料回收優化", "每次投放後回填開信、點擊與報名，下一輪就能更知道哪個客群、通路與文案有效。"),
+    ]
+    cards = "".join(f'<div class="action-card"><b>{escape(t)}</b><br>{escape(b)}</div>' for t, b in items)
+    st.markdown(f'<div class="management-grid">{cards}</div>', unsafe_allow_html=True)
+
+
 def dataframe_with_progress(df: pd.DataFrame, *, height: int | None = None):
     config = {}
     if "預測報名機率" in df.columns:
@@ -467,33 +563,6 @@ def show_image(file_name: str, title: str, how: str, finding: str, action: str):
     if img is not None:
         st.image(img, use_container_width=True)
     explain_box(how, finding, action)
-
-
-def render_markdown_file(file_name: str, title: str):
-    text = safe_read_txt(outputs_path / file_name)
-    with st.expander(title, expanded=False):
-        if text:
-            st.markdown(text)
-        else:
-            st.warning(f"尚未找到 {file_name}，請確認 outputs 資料夾是否有此檔案。")
-
-
-def render_all_markdown_files():
-    md_files = sorted(outputs_path.glob("*.md"))
-    with st.expander("查看 outputs 資料夾內所有 Markdown 文件", expanded=False):
-        if not md_files:
-            st.info("目前 outputs 資料夾沒有 Markdown 文件。")
-        for p in md_files:
-            st.markdown(f"### {p.name}")
-            text = safe_read_txt(p)
-            st.markdown(text if text else "此檔案目前無法讀取。")
-            st.divider()
-
-
-def show_terms(terms: dict[str, str]):
-    st.markdown("### 先看名詞，不用猜")
-    for name, desc in terms.items():
-        st.markdown(f"<span class='term-pill'>{name}</span> {desc}", unsafe_allow_html=True)
 
 
 # -----------------------------
@@ -668,13 +737,13 @@ st.sidebar.title("行銷工作台")
 page = st.sidebar.radio(
     "請選擇功能",
     [
-        "行銷總覽",
-        "高潛力推薦名單",
-        "單一課程作戰室",
         "客群洞察與市場區隔",
+        "高潛力推薦名單",
+        "課程推薦系統",
+        "行銷總覽",
         "AI 文案與素材產生器",
         "成效追蹤與 A/B Test",
-        "模型解釋與安全使用",
+        "模型解釋與預測方法",
     ],
 )
 st.sidebar.markdown("---")
@@ -764,8 +833,13 @@ if page == "行銷總覽":
         st.markdown("### 模型發現轉成行銷語言")
         dataframe_with_progress(points)
 
-    render_markdown_file("final_analysis_report.md", "查看 final_analysis_report.md 完整 Markdown 報告")
-    render_all_markdown_files()
+    st.markdown("### 管理意涵解釋")
+    management_cards()
+    ai_banner(
+        "高層結論",
+        "這套系統的價值不是單純看模型分數，而是把會員分群、課程推薦、文案產出與成效追蹤串成一條行銷作業流程。"
+        "管理者可以用它決定本週主推課程、優先聯絡名單、投放通路與下一輪優化方向。",
+    )
 
 
 # -----------------------------
@@ -777,14 +851,6 @@ elif page == "高潛力推薦名單":
         "這頁是業務與行銷最常用的名單頁。你可以直接篩出某門課、某個客群、某個機率以上的會員。",
         "下載篩選後名單，拿去做 LINE、EDM、電話或再行銷。",
     )
-    show_terms(
-        {
-            "預測報名機率": "模型估計這位會員對該課程的報名可能性。",
-            "優先級": "把機率翻成行動順序：高＝先聯絡，中＝培養，低＝內容觸及。",
-            "客群": "依會員興趣和推薦課程整理出的行銷分眾。",
-        }
-    )
-
     source = st.radio("名單類型", ["Top1：每位會員最推薦一門課", "Top3：每位會員前三推薦課"], horizontal=True)
     data = top1_exec if source.startswith("Top1") else top3_exec
     if data.empty:
@@ -836,11 +902,11 @@ elif page == "高潛力推薦名單":
 
 
 # -----------------------------
-# 3. 單一課程作戰室
+# 3. 課程推薦系統
 # -----------------------------
-elif page == "單一課程作戰室":
+elif page == "課程推薦系統":
     page_header(
-        "單一課程作戰室",
+        "課程推薦系統",
         "選一門課後，系統會整理這門課最適合打哪些會員、主打什麼賣點、用什麼通路。",
         "適合課程開賣前做投放簡報，也適合每週行銷會議使用。",
     )
@@ -898,16 +964,10 @@ elif page == "客群洞察與市場區隔":
         "這頁把分群結果翻成行銷人看得懂的客群輪廓：誰是主要客群、在意什麼、該用什麼文案。",
         "不要用同一套文案打所有人，先依客群改主打賣點。",
     )
-    show_terms(
-        {
-            "市場區隔": "把會員依需求和興趣分成幾群，讓行銷訊息更精準。",
-            "K-means": "一種分群方法，會把行為或興趣相似的人放在同一群。",
-            "卡方檢定": "用來確認某個特徵和客群差異有沒有明顯關係。",
-        }
-    )
-
-    st.markdown("### 三個可執行客群")
-    dataframe_with_progress(SEGMENTS)
+    st.markdown("### 三個可執行客群輪廓")
+    segment_profile_cards()
+    with st.expander("查看客群輪廓表格"):
+        dataframe_with_progress(SEGMENTS)
 
     if cluster_df is not None:
         raw = cluster_df.copy()
@@ -992,14 +1052,15 @@ elif page == "成效追蹤與 A/B Test":
         "這頁用來追蹤投放後的結果，看看哪個通路、哪個客群、哪種文案比較有效。",
         "每次活動結束後上傳 campaign_result.csv，累積下一次優化依據。",
     )
-    show_terms(
-        {
-            "開信率": "收到訊息的人裡，有多少人打開來看。",
-            "點擊率": "收到訊息的人裡，有多少人點了連結。",
-            "報名率": "收到訊息的人裡，有多少人完成報名。",
-            "轉換率": "點擊連結的人裡，有多少人最後報名。",
-        }
-    )
+    with st.expander("成效指標怎麼看"):
+        st.markdown(
+            """
+            - **開信率**：收到訊息的人裡，有多少人打開來看。
+            - **點擊率**：收到訊息的人裡，有多少人點了連結。
+            - **報名率**：收到訊息的人裡，有多少人完成報名。
+            - **轉換率**：點擊連結的人裡，有多少人最後報名。
+            """
+        )
 
     sample = pd.DataFrame(
         [
@@ -1010,7 +1071,9 @@ elif page == "成效追蹤與 A/B Test":
     )
     upload = st.file_uploader("上傳 campaign_result.csv", type=["csv"])
     if upload is None:
-        st.info("尚未上傳成效資料。請使用下方格式建立 campaign_result.csv。")
+        st.info("尚未上傳成效資料。企業可先依照下方 Sample 欄位建立 campaign_result.csv，再上傳到此頁。")
+        st.markdown("### campaign_result.csv 上傳格式 Sample")
+        st.caption("欄位請維持相同名稱：campaign_id、課程ID、客群、通路、發送人數、開信數、點擊數、報名數。")
         result = sample.copy()
         dataframe_with_progress(sample)
     else:
@@ -1037,11 +1100,11 @@ elif page == "成效追蹤與 A/B Test":
 
 
 # -----------------------------
-# 7. 模型解釋與安全使用
+# 7. 模型解釋與預測方法
 # -----------------------------
-elif page == "模型解釋與安全使用":
+elif page == "模型解釋與預測方法":
     page_header(
-        "模型解釋與安全使用",
+        "模型解釋與預測方法",
         "這頁保留模型圖表，但只用來回答：哪些因素會影響推薦、要怎麼翻成行銷賣點。",
         "模型是輔助工具，不是自動決策工具。",
     )
